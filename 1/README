@@ -1,0 +1,62 @@
+
+Problem Set 1
++++++++++++++
+
+Eric Chin (chiner@ccs.neu.edu)
+
+
+1. Internetworking
+==================
+
+Detailed response listed in "part1.txt"
+
+
+2. Chat Client and Server
+=========================
+
+Usage
+-----
+
+To compile, run 
+  "make build" or
+  "javac -cp ./json-simple-1.1.1.jar Client.java Server.java"
+
+To run the server, run 
+  "make server" or 
+  "java -cp ./json-simple-1.1.1.jar: Server <port>"
+(e.g. "java -cp ./json-simple-1.1.1.jar: Server 9791")
+
+To run a client, run 
+  "make client" 
+  "java -cp ./json-simple-1.1.1.jar: Client <server ip> <server port>"
+(e.g. "java -cp ./json-simple-1.1.1.jar: Client 127.0.0.1 9791")
+
+
+Dependencies
+------------
+
+Developed and tested using Java version "1.6.0_27" and the OpenJDK Runtime 
+Environment as currently installed in the CCIS Linux environment.
+
+This program requires "json-simple" (http://code.google.com/p/json-simple/),
+an open source Java library for JSON to encode and decode JSON text.
+
+
+Implementation
+--------------
+
+According to the requirements, this implementation communicates with
+three types of messages.  Messages are sent as JSON strings.
+
+GREETING
+
+  "{ 'type':'greeting', 'data':'' }"
+
+MESSAGE
+
+  "{ 'type':'message', 'data':'<message to server>' }"
+
+INCOMING
+
+  "{ 'type':'incoming', 'data':'<text to client>' }"
+

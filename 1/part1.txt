@@ -1,0 +1,32 @@
+CS4740: Problem Set 1, Part 1
++++++++++++++++++++++++++++++
+
+Eric Chin (chiner@ccs.neu.edu)
+
+Describe in detail all the steps that your internet browser goes through when you click on a web page such as http://www.northeastern.edu/. You should describe which protocols are invoked (e.g., TCP, ARP, DNS, ethernet), their parameters (e.g., port numbers, addresses), network entities (e.g., DNS server, default gateway/router) and the network stack structure.
+
+NOTE: supporting packet listings in ps1-packet-dump.txt.  Expanded version in ps1-packet-dump-expanded.txt.
+
+1. ARP request to get link layer address of the intended receiver (in this case, the default gateway)
+
+  HTYPE: 1, PTYPE: IP (0x0800), HLEN: 6, PLEN: 4, Opcode: 1 (request), SHA: Parallel_53:32:ac, SPA: 10.211.55.3, THA: 00:00:00:00:00:00, TPA:10.211.55.1
+"Who has 10.211.55.1?  Tell 10.211.55.3"
+
+2. DNS standard query to a DNS server get IP address of target host
+
+  Flags: 0x0100 (Standard Query)
+  Queries: A google.com IN
+    - name: google.com
+    - type: A (host address) 
+    - class: IN (0x0001)
+
+3. TCP/IP
+
+  - Performs TCP handshake to resolved address to initiate TCP communication
+    - TCP SYN local to remote on port 80 (because this is an HTTP request), 
+    - TCP SYN/ACK remote to local from port 80
+    - TCP ACK local to remote on port 80 (finalize the handshake)
+  - Send HTTP GET request through CP connection
+    - Src: 10.211.55.3   Dst: 4.53.56.109  Protocol: HTTP  Data: GET / HTTP/1.1 
+  - Remote server sends
+  - Continued HTTP and TCP traffic to GET any necessary files (stylesheets, scripts, images).

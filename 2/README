@@ -1,0 +1,68 @@
+
+Problem Set 2
++++++++++++++
+
+Eric Chin (chiner@ccs.neu.edu)
+
+
+1. Application of Cryptography
+==============================
+
+Usage
+-----
+
+To compile, run 
+  "make build" or
+
+To encrypt _orig_plain_, run
+  "make encrypt"
+
+To decrypt a _encrypted_data_, run
+  "make decrypt" 
+
+Dependencies
+------------
+
+Developed and tested using Java version "1.6.0_27" and the OpenJDK Runtime 
+Environment as currently installed in the CCIS Linux environment.
+
+This program requires "commons-io" (http://commons.apache.org/proper/commons-io/),
+an open source Java library maintained by Apache.  It is a "library of utilities to
+assist with developing IO functionality."
+
+
+Implementation and Design
+-------------------------
+
+This program was designed to encrypt a file using standard encryption practices.
+To accomplish this, this program will perform the following:
+
+Encryption
+1. Generate a symmetric key (128-bit AES)
+2. Sign the data with RSA private key (SHA-256, RSA)
+3. Encrypt the data with symmetric key
+4. Encrpt the symmetric key with with RSA public key (SHA-256, RSA)
+
+Decryption
+1. Decrypt the symmetric key with RSA private key (SHA256, RSA)
+2. Decrypt the data with symmetric key (128-bit AES key)
+3. Verify signature using RSA public key (SHA256, RSA)
+
+Symmetric encryption is performed with AES using an Cipher Block Chaining (CBC) 
+encryption mode due to the well known fact that it is significantly improves the 
+information hidden over other modes like ECB.
+
+The program will generate a 128-bit symmetric key and a 128-bit initialization vector.
+These are both performed using SecureRandom.  This program was designed to use 128-bit
+symmetric keys (AES) because the security policy for the standard Java Runtime
+Environment requires elevated privilege to generate keys larger than 128 bits.
+
+Asymmetric encryption is performed using RSA using the Electronic Codebook (ECB)
+encryption mode because of its support in the Java Standard Library.  It would be
+preferred to use RSA/CBC.
+
+RSA keys are generated using the command line program openssl.  This program was
+developed and tested using large keys of 2048 bits in size.  The keys are converted
+from the standard .pem format to the .der format, which is more compatible with
+Java's standard library.  These RSA keys can be generated using the "make genkeys" and
+are located in the "./keys" directory.
