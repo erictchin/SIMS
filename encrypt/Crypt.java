@@ -8,6 +8,9 @@ import java.security.*;
 import java.security.spec.*;
 import javax.crypto.spec.*;
 
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.codec.binary.Base64;
+
 
 public class Crypt {
     public static void  main(String [] args) throws Exception {
@@ -58,6 +61,66 @@ public class Crypt {
         writeBytesToFile( filepath, data, false );
     }
 
+    // sha256hex : gives the hex string representation of the SHA256 hash of the given String 
+    public static String sha256hex( String s ){
+        return DigestUtils.sha256Hex( s );
+    }
+
+    // sha512hex : gives the hex string representation of the SHA256 hash of the given String
+    public static String sha512hex( String s ){
+        return DigestUtils.sha512Hex( s );
+    }
+
+    // base64encode : encode the byte array into a base64 string
+    public static String base64encode( byte[] arr ){
+        Base64 base64 = new Base64();
+        byte[] str = base64.encode( arr );
+
+        try{
+            return new String( str, "UTF-8" );
+        }catch( UnsupportedEncodingException e ){
+            return new String( str );
+        }
+    }
+
+    // base64decode : decode the base64 string to a byte array
+    public static byte[] base64decode( String str ){
+        Base64 base64 = new Base64();
+        byte[] bytes;
+        try{
+            bytes = base64.decode( str.getBytes("UTF-8") );
+        }catch( UnsupportedEncodingException e ){
+            bytes = base64.decode( str.getBytes() );
+        }
+
+        return bytes;
+    }
+
+    // generateKeyPair : generates a 1024-bit RSA keypair
+    public static KeyPair generateKeyPair(){
+        try{
+            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+            keyPairGenerator.initialize(1024);
+            KeyPair keyPair = keyPairGenerator.genKeyPair();
+
+            return keyPair;
+        }catch( Exception e ){
+            // Should never throw this exception
+            return null;
+        }
+
+    }
+
+    // getPrivateKeyFromKeyPair : extracts the PrivateKey from the KeyPair
+    public static PrivateKey getPrivateKeyFromKeyPair( KeyPair k ){
+        return k.getPrivate();
+    }
+
+    // getPublicKeyFromKeyPair : extract the PublicKey from the KeyPair
+    public static PublicKey getPublicKeyFromKeyPair( KeyPair k ){
+        return k.getPublic();
+    }
+
     // getPrivateKeyFromFile : reads and constructs a PrivateKey from the file
     public static PrivateKey getPrivateKeyFromFile( String pathname ){
         byte[] keyBytes = readBytesFromFile( pathname );
@@ -78,16 +141,7 @@ public class Crypt {
     public static PublicKey getPublicKeyFromFile( String pathname ){
         byte[] keyBytes = readBytesFromFile( pathname );
 
-        try{
-            // Generate an RSA PublicKey from the key file
-            X509EncodedKeySpec spec = new X509EncodedKeySpec( keyBytes );
-            KeyFactory kf = KeyFactory.getInstance( "RSA" );
-
-            return kf.generatePublic( spec );
-        }catch( Exception ikse ){
-            System.out.println( "Invalid KeySpec exception" );
-            return null;
-        }
+        return getPublicKeyFromBytes( keyBytes );
     }
 
     // signData : creates a signature for the data
@@ -129,7 +183,7 @@ public class Crypt {
             return null;
         }
     }
-
+    
     // generateIV : generates a random 16 byte initialization vector that will
     // be used in AES CBC encryption
     public static byte[] generateIV(){
@@ -138,6 +192,27 @@ public class Crypt {
         random.nextBytes(iv);
 
         return iv;
+    }
+
+    // String wrappers for aes_encrypt and aes_decrypt
+    public static String aes_encrypt_s( byte[] plaintext, SecretKey sKey, byte[] iv ){
+        byte[] encrypted = aes_encrypt( plaintext, sKey, iv );
+
+        try{
+            return new String( encrypted, "UTF-8" );
+        }catch( Exception e ){
+            return new String( encrypted );
+        }
+    }
+
+    public static String aes_decrypt_s( byte[] ciphertext, SecretKey sKey, byte[] iv ){
+        byte[] deciphered = aes_decrypt( ciphertext, sKey, iv );
+
+        try{
+            return new String( deciphered, "UTF-8" );
+        }catch( Exception e ){
+            return new String( deciphered );
+        }
     }
 
     // aes_encrypt : Encrypt the plaintext with the given secret key
@@ -203,7 +278,7 @@ public class Crypt {
     }
 
     // getEncodedKey : gets the byte encoding of the given secret key
-    public static byte[] getEncodedKey( SecretKey sKey ){
+    public static byte[] getEncodedKey( Key sKey ){
         return sKey.getEncoded();
     }
 
@@ -213,6 +288,20 @@ public class Crypt {
         SecretKey skey = new SecretKeySpec(encodedKey, 0, 16, "AES");
         
         return skey;
+    }
+
+    // getPublicKeyFromBytes : converts a byte array into a 1024-bit RSA key
+    public static PublicKey getPublicKeyFromBytes( byte[] encodedKey ){
+        try{
+            // Generate an RSA PublicKey from the key file
+            X509EncodedKeySpec spec = new X509EncodedKeySpec( encodedKey );
+            KeyFactory kf = KeyFactory.getInstance( "RSA" );
+
+            return kf.generatePublic( spec );
+        }catch( Exception ikse ){
+            System.out.println( "Invalid KeySpec exception" );
+            return null;
+        }
     }
 
     // encrypt : the main operating function to encrypt the data.

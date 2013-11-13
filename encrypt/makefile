@@ -1,12 +1,12 @@
 
 build:
-	javac -cp ./commons-io.jar Crypt.java
+	javac -cp ../libs/commons-io.jar:../libs/commons-codec.jar Crypt.java
 
 encrypt:
-	java -cp ./commons-io.jar: Crypt -e keys/destpub.der keys/origpriv.der orig_plain encrypted_data
+	java -cp ../libs/commons-io.jar:../libs/commons-codec.jar: Crypt -e keys/destpub.der keys/origpriv.der orig_plain encrypted_data
 
 decrypt:
-	java -cp ./commons-io.jar: Crypt -d keys/destpriv.der keys/origpub.der encrypted_data decrypted_data
+	java -cp ../libs/commons-io.jar:../libs/commons-codec.jar: Crypt -d keys/destpriv.der keys/origpub.der encrypted_data decrypted_data
 
 clean:
 	rm -rf *.class
