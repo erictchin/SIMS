@@ -147,6 +147,7 @@ public class Server {
             return this.valid;
         }
 
+        @SuppressWarnings("unchecked")
         private void send_challenge(String n){
             JSONObject obj = new JSONObject();
 
@@ -158,7 +159,7 @@ public class Server {
             JSONObject challenge_data = new JSONObject();
             {
                 String salt = Crypt.base64encode( Crypt.generateIV() );
-                String pwh = Crypt.sha512hex( server_get_password( salt + this.name ) );
+                String pwh = Crypt.sha512hex( salt + server_get_password( this.name ) );
 
                 challenge_data.put( "pwh", pwh );
                 challenge_data.put( "salt", salt );
