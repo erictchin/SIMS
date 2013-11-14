@@ -69,10 +69,15 @@ public class Client {
         this.out = new PrintWriter(client.getOutputStream(),true);
         
         // Send the greeting message
-        greeting();
+        send_greeting();
+        if( receive_greeting() ){
+            
 
         // new ChatThread().start();      // create thread to listen for user input
         // new MessagesThread().start();  // create thread for listening for messages
+        }else{
+            System.out.println( "You could not be authenticated to the server." );
+        }   
     }
 
     // Abstracted method to generate messages of type with data (used for greeting and message)
@@ -86,9 +91,40 @@ public class Client {
         return obj;
     }
 
+    public boolean receive_greeting(){
+        String server_greeting = br.readLine();
+        Object o = JSONValue.parse( server_greeting );
+        JSONObject a = (JSONObject) o;
+
+        if( a.get("type").equals("greeting") ){
+            // proper message type
+            String nonce = (String) a.get("d1");
+            {
+                byte[] nonce_b = Crypt.base64decode(nonce);
+                nonce_b = Crypt.rsa_decrypt( nonce_b, this.privateKey );
+
+                nonce = new String( nonce_b );
+            }
+
+            // deal with d2 {pwh, pwh_salt}, salt
+            byte[] d2salt = Crypt.base64decode( (String) a.get("d2salt") );
+            String d2 = a.get("d2");
+            {
+                byte[] d2_b = Crypt.base64decode( d2 );
+                byte[] d2_decrypt = Crypt.aes_decrypt( d2_b, this.sessionKey, d2salt )
+                
+
+                // verify that pwh matches my password
+
+            }
+
+        }
+        
+    }
+
     // greeting() : sends a greeting message to the server
     @SuppressWarnings("unchecked")
-    public void greeting(){
+    public void send_greeting(){
         JSONObject obj = new JSONObject();
 
         obj.put( "type", "greeting" );
@@ -118,14 +154,18 @@ public class Client {
             client_data.put( "pwh", pwh );
             client_data.put( "salt", salt );
         }
-        byte[] client_data_salt = Crypt.generateIV();
-        byte[] encrypted_client_data = Crypt.aes_encrypt( 
-                client_data.toString().getBytes(),
-                this.sessionKey,
-                client_data_salt );
 
-        obj.put( "d2", Crypt.base64encode( encrypted_client_data ) );
-        obj.put( "d2salt", Crypt.base64encode( client_data_salt ) );
+        // Encrypt the client_data with the symmetric key and a new salt
+        {
+            byte[] client_data_salt = Crypt.generateIV();
+            byte[] encrypted_client_data = Crypt.aes_encrypt( 
+                    client_data.toString().getBytes(),
+                    this.sessionKey,
+                    client_data_salt );
+
+            obj.put( "d2", Crypt.base64encode( encrypted_client_data ) );
+            obj.put( "d2salt", Crypt.base64encode( client_data_salt ) );
+        }
 
         // Send the initial JSON blob to the server
         out.println( obj.toString() );
