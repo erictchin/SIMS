@@ -177,7 +177,12 @@ public class Server {
             output.println( obj.toString() );
         }
 
+        // Listens for user to respond to challenge and verifies that the NONCE hash received
+        // matches the NONCE hash that server generates
         private boolean validate_challenge( String nonce ){
+            // receive message from client
+            
+            // verify that it matches the hash that i calculate
 
             return false;
         }

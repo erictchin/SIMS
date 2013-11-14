@@ -127,7 +127,13 @@ public class Client {
                 String salt = (String) challenge_data.get("salt");
 
                 // compare sha512hex( salt + this.password ) to PWH
-                return pwh.equals( Crypt.sha512hex( salt + this.password ) );
+                if( pwh.equals( Crypt.sha512hex( salt + this.password ) ) ){
+                    // send a challenge
+
+                    return true;
+                }else{
+                    return false;
+                }
             }else{
                 return false;
             }
