@@ -71,6 +71,9 @@ public class Client {
         // Send the greeting message
         send_greeting();
         if( receive_greeting() ){
+            System.out.println( "Greeting from server is nice!" );
+
+            // now reply with challenge response (hashed nonce);
             
 
         // new ChatThread().start();      // create thread to listen for user input
@@ -92,34 +95,45 @@ public class Client {
     }
 
     public boolean receive_greeting(){
-        String server_greeting = br.readLine();
-        Object o = JSONValue.parse( server_greeting );
-        JSONObject a = (JSONObject) o;
+        try{
+            String server_greeting = br.readLine();
+            System.out.println("Received greeting from server: " + server_greeting);
+            Object o = JSONValue.parse( server_greeting );
+            JSONObject a = (JSONObject) o;
 
-        if( a.get("type").equals("greeting") ){
-            // proper message type
-            String nonce = (String) a.get("d1");
-            {
-                byte[] nonce_b = Crypt.base64decode(nonce);
-                nonce_b = Crypt.rsa_decrypt( nonce_b, this.privateKey );
+            if( a.get("type").equals("greeting") ){
+                // proper message type
+                String nonce = (String) a.get("d1");
+                {
+                    byte[] nonce_b = Crypt.base64decode(nonce);
+                    nonce_b = Crypt.rsa_decrypt( nonce_b, this.privateKey );
 
-                nonce = new String( nonce_b );
+                    nonce = new String( nonce_b );
+                }
+
+                // deal with d2 {pwh, pwh_salt}, salt
+                byte[] d2salt = Crypt.base64decode( (String) a.get("d2salt") );
+                String d2 = (String)a.get("d2");
+                JSONObject challenge_data = null;
+                {
+                    byte[] d2_b = Crypt.base64decode( d2 );
+                    byte[] d2_decrypt = Crypt.aes_decrypt( d2_b, this.sessionKey, d2salt );
+
+                    String challenge_data_raw = new String( d2_decrypt );
+                    Object cd = JSONValue.parse( challenge_data_raw );
+                    challenge_data = (JSONObject) cd;
+                }
+                String pwh = (String) challenge_data.get("pwh");
+                String salt = (String) challenge_data.get("salt");
+
+                // compare sha512hex( salt + this.password ) to PWH
+                return pwh.equals( Crypt.sha512hex( salt + this.password ) );
+            }else{
+                return false;
             }
-
-            // deal with d2 {pwh, pwh_salt}, salt
-            byte[] d2salt = Crypt.base64decode( (String) a.get("d2salt") );
-            String d2 = a.get("d2");
-            {
-                byte[] d2_b = Crypt.base64decode( d2 );
-                byte[] d2_decrypt = Crypt.aes_decrypt( d2_b, this.sessionKey, d2salt )
-                
-
-                // verify that pwh matches my password
-
-            }
-
+        }catch(Exception e){
+            return false;
         }
-        
     }
 
     // greeting() : sends a greeting message to the server
