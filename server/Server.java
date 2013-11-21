@@ -129,13 +129,14 @@ public class Server {
                 this.port = "" + client.getPort();
 
                 // send response to greeting
-                challenge();
+                if( challenge() ){
+                    System.out.println( "validated client confirmation" );
+                    valid = true;
 
-                valid = true;
-
-
-
-                start();
+                    start();
+                }else{
+                    valid = false;
+                }
             }else{
                 valid = false;
             }
@@ -177,16 +178,6 @@ public class Server {
             output.println( obj.toString() );
         }
 
-        // Listens for user to respond to challenge and verifies that the NONCE hash received
-        // matches the NONCE hash that server generates
-        private boolean validate_challenge( String nonce ){
-            // receive message from client
-            
-            // verify that it matches the hash that i calculate
-
-            return false;
-        }
-
         // challenge(): send a GREETING challenge to the connecting client to authenticate
         // user
         @SuppressWarnings("unchecked")
@@ -195,9 +186,30 @@ public class Server {
             String nonce = "" + n;
             send_challenge(nonce);
 
-            if( validate_challenge( nonce ) ){
+            if( validate_client_confirmation( nonce ) ){
                 return true;
             }else{
+                return false;
+            }
+        }
+
+        // Listens for user to respond to challenge and verifies that the NONCE hash received
+        // matches the NONCE hash that server generates
+        @SuppressWarnings("unchecked")
+        private boolean validate_client_confirmation( String nonce ){
+            String nonce_h = Crypt.sha512hex( nonce );
+
+            try{
+                String challenge = input.readLine();
+                Object o = JSONValue.parse( challenge );
+                JSONObject a = (JSONObject) o;
+
+                if( ((String) a.get( "type" )).equals( "confirm" ) ){
+                    return nonce_h.equals( (String)a.get("d1") );
+                }else{
+                    return false;
+                }
+            }catch( IOException e ){
                 return false;
             }
         }
