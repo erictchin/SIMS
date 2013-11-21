@@ -155,6 +155,14 @@ public class Crypt {
         return signature.sign();
     }
 
+    public static byte[] generateMAC(byte[] data, SecretKey key)
+    {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(key);
+        
+        return mac.doFinal(data);
+    }
+
     // verifyData: verifies that the signature on the given byte array
     //   Note: this utilizes the Java Standard Library java.security.Signature
     //   and is specified to verify the signature using an RSA key with a
