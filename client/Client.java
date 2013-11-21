@@ -71,9 +71,10 @@ public class Client {
         // Send the greeting message
         send_greeting();
         if( receive_greeting() ){
-            System.out.println( "Greeting from server is nice!" );
+            // Successfully authenticated the server and sent challenge confirmation.
+            System.out.println( "Successfully authenticated the server." );
+            System.out.println( "Now starting listening threads" );
 
-            // now reply with challenge response (hashed nonce);
             
 
         // new ChatThread().start();      // create thread to listen for user input
@@ -92,6 +93,18 @@ public class Client {
         obj.put( "data", data );
 
         return obj;
+    }
+
+    // We have authenticated the server, so now we need to send the proper
+    // confirmation
+    @SuppressWarnings("unchecked")
+    public void send_authentication_confirm( String nonce ){
+        JSONObject obj = new JSONObject();
+
+        obj.put( "type", "confirm" );
+        obj.put( "d1", Crypt.sha512hex( nonce ) );
+
+        out.println( obj.toString() );
     }
 
     public boolean receive_greeting(){
@@ -129,6 +142,8 @@ public class Client {
                 // compare sha512hex( salt + this.password ) to PWH
                 if( pwh.equals( Crypt.sha512hex( salt + this.password ) ) ){
                     // send a challenge
+                    
+                    send_authentication_confirm( nonce );
 
                     return true;
                 }else{
