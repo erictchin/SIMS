@@ -14,9 +14,11 @@ public class Server {
     Vector<ClientHandler> clients;
 
     // Also keep track of essential information:
-    //    - map a "name" to associated IP address, Port, PublicKey
-    //    - values are serialized as a JSON String (change this to a JSON Object?)
-    HashMap<String, String> usertable;
+    //    - map a "name" to associated ClientHandler
+    HashMap<String, ClientHandler> usertable;
+
+    // Holds a list of JSON Strings with client information
+    HashMap<String, String> client_info;
 
     // The server's privat ekey
     private PrivateKey serverPrivateKey;
@@ -60,6 +62,8 @@ public class Server {
 
         this.random = new SecureRandom();
 
+        this.client_info = new HashMap<String, String>();
+
     }
 
     // server_get_password : get the password of the given username
@@ -85,10 +89,21 @@ public class Server {
             if( c.isValid() ){
                 // if the client is valid, then we can:
                 // 1. add it to the list of clients
-                // 2. add it to the usertable (with public key)
+                // 2. add it to the usertable
                 clients.add(c);
+                usertable.put( c.getName(), c );
+                client_info.put( c.getName(), c.getClientInfo() );
             }
         }
+    }
+
+    public void send_client_info(){
+        java.util.LinkedList<String> info = new java.util.LinkedList<String>();
+        info.addAll( this.client_info.values() );
+
+        String info_string = JSONValue.toJSONString(info);
+
+
     }
 
     private boolean server_verify_password( String name, String pw_hash, String pw_salt ){
@@ -116,6 +131,24 @@ public class Server {
         BufferedReader input;
         PrintWriter output;
         boolean valid;
+        
+        public String getClientPublicKey(){
+            byte[] pk_bytes = Crypt.getEncodedKey( this.publicKey );
+            String pk_string = Crypt.base64encode( pk_bytes );
+
+            return pk_string;
+        }
+
+        public String getClientInfo(){
+            JSONObject obj = new JSONObject();
+
+            obj.put( "ip", this.ip );
+            obj.put( "port", this.port );
+            obj.put( "name", this.name );
+            obj.put( "key", this.getClientPublicKey() );
+
+            return obj.toString();
+        }
 
         public ClientHandler( Socket client ) throws Exception {
             // get input and output streams
@@ -140,6 +173,10 @@ public class Server {
             }else{
                 valid = false;
             }
+        }
+
+        public String getName(){
+            return this.name;
         }
 
         // Determines if the Client represented by this handler has
