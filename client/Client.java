@@ -23,7 +23,9 @@ public class Client {
     private PublicKey publicKey;
     private PrivateKey privateKey;
     private PublicKey serverKey;
-    private SecretKey sessionKey;
+    private SecretKey sessionKey_server;
+
+    private HashMap<String, Peer> peers;
 
     public static void main(String [] args) {
         // Usage: java Client <name> <server ip> <server port>
@@ -60,13 +62,14 @@ public class Client {
             this.publicKey = mykeys.getPublic();
             this.privateKey = mykeys.getPrivate();
 
-            this.sessionKey = Crypt.generateAESKey();
+            this.sessionKey_server = Crypt.generateAESKey();
         }
 
         this.client  = new Socket(ip, port);
 
         this.br = new BufferedReader( new InputStreamReader( client.getInputStream()) ) ;
         this.out = new PrintWriter(client.getOutputStream(),true);
+        this.peers = new HashMap<String, Peer>();
         
         // Send the greeting message
         send_greeting();
@@ -75,10 +78,8 @@ public class Client {
             System.out.println( "Successfully authenticated the server." );
             System.out.println( "Now starting listening threads" );
 
-            
-
-        // new ChatThread().start();      // create thread to listen for user input
-        // new MessagesThread().start();  // create thread for listening for messages
+            new ChatThread().start();      // create thread to listen for user input
+            new MessagesThread().start();  // create thread for listening for messages
         }else{
             System.out.println( "You could not be authenticated to the server." );
         }   
@@ -130,7 +131,7 @@ public class Client {
                 JSONObject challenge_data = null;
                 {
                     byte[] d2_b = Crypt.base64decode( d2 );
-                    byte[] d2_decrypt = Crypt.aes_decrypt( d2_b, this.sessionKey, d2salt );
+                    byte[] d2_decrypt = Crypt.aes_decrypt( d2_b, this.sessionKey_server, d2salt );
 
                     String challenge_data_raw = new String( d2_decrypt );
                     Object cd = JSONValue.parse( challenge_data_raw );
@@ -167,7 +168,7 @@ public class Client {
 
         // d1: ServerPub-encrypted symmetric key
         {
-            byte[] sessionKey_encrypted = Crypt.getEncodedKey( this.sessionKey );
+            byte[] sessionKey_encrypted = Crypt.getEncodedKey( this.sessionKey_server );
             sessionKey_encrypted = Crypt.rsa_encrypt( sessionKey_encrypted, this.serverKey );
 
             String skey_encrypted = Crypt.base64encode( sessionKey_encrypted );
@@ -195,7 +196,7 @@ public class Client {
             byte[] client_data_salt = Crypt.generateIV();
             byte[] encrypted_client_data = Crypt.aes_encrypt( 
                     client_data.toString().getBytes(),
-                    this.sessionKey,
+                    this.sessionKey_server,
                     client_data_salt );
 
             obj.put( "d2", Crypt.base64encode( encrypted_client_data ) );
@@ -214,18 +215,42 @@ public class Client {
         out.println( obj.toString() );
     }
 
+    // update the list of other clients with information from the server
+    public boolean updateList( String data, String hmac, String iv_s ){
+
+        byte[] iv = Crypt.base64decode( iv_s );
+        // 1. base64decode data
+        byte[] data_b = Crypt.base64decode( data );
+        // 2. decrypt data using session key with server
+        byte[] decrypted_data = Crypt.aes_decrypt( data_b, this.sessionKey_server, iv );
+        // 3. verify signature of decrypted data with hmac
+        String client_infos = new String( decrypted_data );
+        
+        // calculate hmac and compare it with hmac
+
+        // 4. parse client_infos to get the real list
+
+        // 5. update list with users, update only the non-active ones
+
+        return true;
+    }
+
     // parseMessage() : parses an INCOMING message from the server
     public String parseMessage( String msg ){
         if( msg != null ){
             Object o = JSONValue.parse( msg );
             JSONObject a = (JSONObject) o;
 
-            if( a.get("type").equals("incoming" ) ){
-                String ip = (String)a.get("source-ip");
-                String port = (String)a.get("source-port");
+            if( a.get("type").equals("list" ) ){
                 String data = (String)a.get("data");
+                String hmac = (String)a.get("sig");
+                String iv = (String)a.get("iv");
 
-                return String.format( "<from %s:%s>: %s", ip, port, data );
+                if( updateList( data, hmac, iv) ){
+                    String s = "<server>: updated user list:\n" +
+                        "  " + this.getConnectedUsers();
+                    return s;
+                }
             } 
         }
 
@@ -267,6 +292,37 @@ public class Client {
                     message( line );
                 } 
             } catch(Exception e) { e.printStackTrace() ;}
+        }
+    }
+
+    // Peer -- keeps track of an individual peer
+    // * Should listen for messages from peer
+    // * Should be able to send messages to peer
+    class Peer extends Thread{
+
+        String name;
+        String ip;
+        String port;
+        PublicKey publicKey;
+        SecretKey sessionKey;
+        BufferedReader input;
+        PrintWriter output;
+
+        public Peer( String ip, String port, String name, PublicKey publicKey ){
+            this.name = name;
+            this.ip = ip;
+            this.port = port;
+            this.publicKey = publicKey;
+
+            this.sessionKey = null;
+            this.input = null;
+            this.output = null;
+        }
+
+
+
+        public void run(){
+            //
         }
     }
 } 
