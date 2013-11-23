@@ -93,17 +93,16 @@ public class Server {
                 clients.add(c);
                 usertable.put( c.getName(), c );
                 client_info.put( c.getName(), c.getClientInfo() );
+                c.update_client_list(this.all_client_info());
             }
         }
     }
 
-    public void send_client_info(){
+    public String all_client_info(){
         java.util.LinkedList<String> info = new java.util.LinkedList<String>();
         info.addAll( this.client_info.values() );
 
-        String info_string = JSONValue.toJSONString(info);
-
-
+        return JSONValue.toJSONString(info);
     }
 
     private boolean server_verify_password( String name, String pw_hash, String pw_salt ){
@@ -213,6 +212,23 @@ public class Server {
             }   
  
             output.println( obj.toString() );
+        }
+
+        @SuppressWarnings("unchecked")
+        public void update_client_list(String client_info)
+        {
+            JSONObject obj = new JSONObject();
+            byte[] iv = Crypt.generateIV();
+            byte[] encrypted_info_b = Crypt.aes_encrypt(client_info.getBytes(), this.sessionKey, iv );
+            String encrypted_info = Crypt.base64encode( encrypted_info_b );
+            String sig = Crypt.base64encode( Crypt.generateMAC(client_info.getBytes(), this.sessionKey ));
+            
+            obj.put( "type", "list" );
+            obj.put( "data", encrypted_info );
+            obj.put( "sig", sig );
+            obj.put( "iv", Crypt.base64encode(iv) );
+
+            sendMessage(obj.toString());
         }
 
         // challenge(): send a GREETING challenge to the connecting client to authenticate
