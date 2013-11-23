@@ -239,9 +239,6 @@ public class Client {
             // calculate hmac and compare it with hmac
             String my_hmac = Crypt.base64encode( Crypt.generateMAC( decrypted_data, this.sessionKey_server ) );
 
-            System.out.println( "v " + my_hmac );
-            System.out.println( "s " + hmac );
-
             if( my_hmac.equals( hmac ) ){
                 // confirmed the signature of the data
 
@@ -279,31 +276,33 @@ public class Client {
         }
     }
 
-    // parseMessage() : parses an INCOMING message from the server
-    public String parseMessage( String msg ){
-        if( msg != null ){
-            Object o = JSONValue.parse( msg );
-            JSONObject a = (JSONObject) o;
-
-            if( a.get("type").equals("list" ) ){
-                String data = (String)a.get("data");
-                String hmac = (String)a.get("sig");
-                String iv = (String)a.get("iv");
-
-                if( updateList( data, hmac, iv) ){
-                    String s = "<server>: updated user list:\n" +
-                        "  " + this.getConnectedUsers();
-                    return s;
-                }
-            } 
-        }
-
-        return "";
-    }
+    
     
     
     // MessagesThread -- waits for messages from server
     class MessagesThread extends Thread {
+        // parseMessage() : parses an INCOMING message from the server
+        public String parseMessage( String msg ){
+            if( msg != null ){
+                Object o = JSONValue.parse( msg );
+                JSONObject a = (JSONObject) o;
+
+                if( a.get("type").equals("list" ) ){
+                    String data = (String)a.get("data");
+                    String hmac = (String)a.get("sig");
+                    String iv = (String)a.get("iv");
+
+                    if( updateList( data, hmac, iv) ){
+                        String s = "<server>: updated user list:\n" +
+                            "  " + getConnectedUsers();
+                        return s;
+                    }
+                } 
+            }
+
+            return "";
+        }
+    
         public void run() {
             String msg;
             try {
@@ -322,6 +321,31 @@ public class Client {
 
     // ChatThread -- listens for user input
     class ChatThread extends Thread {
+
+        public void message( String msg ){
+            String test = msg.toLowerCase();
+            if( test.startsWith( "list" ) ){
+
+                // then send the server a list command
+                
+                System.out.println( "Get List from Server" );
+
+                out.println( generateMessage( "list", "" ) );
+            }else if( test.startsWith( "send" ) ){
+                int space1 = msg.indexOf( " " );
+                int space2 = msg.indexOf( " ", space1+1 );
+
+                String recipient = test.substring( space1, space2 ).trim();
+                String message = msg.substring( space2 ).trim();
+                
+                System.out.println( "Sending : \"" + message + "\" to " + recipient );
+            }else if( test.startsWith( "logout" ) ){
+                // Perform logout procedure
+                // 1. send server logout command
+                // 2. tell peers that i've disconnected?
+            }
+        }
+
         public void run() {
             String line;
 
@@ -330,7 +354,7 @@ public class Client {
             System.out.print( "> " );
             try {
                 while(true) {
-                    line = scan.nextLine();
+                    line = scan.nextLine().trim();
 
                     System.out.print( "> " );
                     message( line );
@@ -351,6 +375,8 @@ public class Client {
         SecretKey sessionKey;
         BufferedReader input;
         PrintWriter output;
+        boolean active;
+        boolean valid;
 
         public Peer( String ip, String port, String name, PublicKey publicKey ){
             this.name = name;
@@ -361,12 +387,17 @@ public class Client {
             this.sessionKey = null;
             this.input = null;
             this.output = null;
+
+            this.active = false;
+            this.valid = false;
         }
 
-
-
         public void run(){
-            //
+            // First, set this to active.
+
+            this.active = true;
+
+
         }
     }
 } 

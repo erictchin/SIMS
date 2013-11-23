@@ -86,7 +86,6 @@ public class Server {
         while( true ) {
             Socket client = server.accept();
             ClientHandler c = new ClientHandler(client);
-            String current_client_info = this.all_client_info();
             if( c.isValid() ){
                 // if the client is valid, then we can:
                 // 1. add it to the list of clients
@@ -94,7 +93,7 @@ public class Server {
                 this.clients.add(c);
                 this.usertable.put( c.getClientName(), c );
                 this.client_info.put( c.getClientName(), c.getClientInfo() );
-                c.update_client_list(current_client_info);
+                c.update_client_list(this.all_client_info());
             }
         }
     }
@@ -333,8 +332,12 @@ public class Server {
                 Object o = JSONValue.parse( line );
                 JSONObject a = (JSONObject) o;
 
-                if( a.get("type").equals("message" ) ){
-                    return (String)a.get("data");
+                if( a.get("type").equals("list" ) ){
+
+                    System.out.println( "send the user the list again" );
+                    this.update_client_list( all_client_info() );
+                    
+                    return "";
 
                 }else{
                     // client didn't send a proper message
@@ -371,13 +374,14 @@ public class Server {
             String message;
             try {
                 while(true)   {
-                    // Read and parse a MESSAGE from the clients
+                    // Read and parse a MESSAGE from the client
                     message = input.readLine();
 
                     message = parseMessage(message);
 
                     // Broadcast messages
                     if( message.length() > 0 ){
+                        // need to parse
                         message = generateBroadcast(message);
 
                         System.out.println( "INCOMING: " + message );
