@@ -155,8 +155,7 @@ public class Crypt {
         return signature.sign();
     }
 
-    public static byte[] generateMAC(byte[] data, SecretKey key)
-    {
+    public static byte[] generateMAC(byte[] data, SecretKey key) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(key);
         

@@ -49,6 +49,15 @@ public class Client {
         return password;
     }
 
+    public String getConnectedUsers(){
+        java.lang.StringBuilder strb = new java.lang.StringBuilder();
+        for( String x : peers.keySet() ){
+            strb.append( "  " + x + "\n" );
+        }
+
+        return strb.toString();
+    }
+
     // Construct a Client to handle user input and network communication
     public Client( String name, String ip, int port, String password ) throws Exception {
         this.name = name;
@@ -218,21 +227,56 @@ public class Client {
     // update the list of other clients with information from the server
     public boolean updateList( String data, String hmac, String iv_s ){
 
-        byte[] iv = Crypt.base64decode( iv_s );
-        // 1. base64decode data
-        byte[] data_b = Crypt.base64decode( data );
-        // 2. decrypt data using session key with server
-        byte[] decrypted_data = Crypt.aes_decrypt( data_b, this.sessionKey_server, iv );
-        // 3. verify signature of decrypted data with hmac
-        String client_infos = new String( decrypted_data );
-        
-        // calculate hmac and compare it with hmac
+        try{
+            byte[] iv = Crypt.base64decode( iv_s );
+            // 1. base64decode data
+            byte[] data_b = Crypt.base64decode( data );
+            // 2. decrypt data using session key with server
+            byte[] decrypted_data = Crypt.aes_decrypt( data_b, this.sessionKey_server, iv );
+            // 3. verify signature of decrypted data with hmac
+            String client_infos = new String( decrypted_data );
 
-        // 4. parse client_infos to get the real list
+            // calculate hmac and compare it with hmac
+            String my_hmac = Crypt.base64encode( Crypt.generateMAC( decrypted_data, this.sessionKey_server ) );
 
-        // 5. update list with users, update only the non-active ones
+            System.out.println( "v " + my_hmac );
+            System.out.println( "s " + hmac );
 
-        return true;
+            if( my_hmac.equals( hmac ) ){
+                // confirmed the signature of the data
+
+                // 4. parse client_infos to get the real list
+                // parse JSON List [a, b, c...]
+                Object obj = JSONValue.parse( client_infos );
+                JSONArray arr = (JSONArray) obj;
+
+                for( int i = 0; i < arr.size(); i++ ){
+                    String c = (String) arr.get( i );
+                    Object cobj = JSONValue.parse( c );
+                    JSONObject client = (JSONObject) cobj;
+
+                    String ip = (String) client.get( "ip" );
+                    String port = (String) client.get( "port" );
+                    String name = (String) client.get( "name" );
+                    String key_s = (String) client.get( "key" );
+
+                    PublicKey key = Crypt.getPublicKeyFromBytes( Crypt.base64decode( key_s ) );
+
+                    if( this.peers.containsKey( name ) ){
+                    }else{
+                        Peer new_peer = new Peer( ip, port, name, key );
+
+                        this.peers.put( name, new_peer );
+                    }
+                }
+
+                return true;
+            }else{
+                return false;
+            }
+        }catch( Exception e ){
+            return false;
+        }
     }
 
     // parseMessage() : parses an INCOMING message from the server

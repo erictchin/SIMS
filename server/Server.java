@@ -55,7 +55,7 @@ public class Server {
 
     public Server(){
         this.clients = new Vector<ClientHandler>();
-        this.usertable = new HashMap<String, String>();
+        this.usertable = new HashMap<String, ClientHandler>();
         this.database = Server.getPasswordDatabase();
 
         this.serverPrivateKey = Crypt.getPrivateKeyFromFile( "server_key" );
@@ -86,18 +86,21 @@ public class Server {
         while( true ) {
             Socket client = server.accept();
             ClientHandler c = new ClientHandler(client);
+            String current_client_info = this.all_client_info();
             if( c.isValid() ){
                 // if the client is valid, then we can:
                 // 1. add it to the list of clients
                 // 2. add it to the usertable
-                clients.add(c);
-                usertable.put( c.getName(), c );
-                client_info.put( c.getName(), c.getClientInfo() );
-                c.update_client_list(this.all_client_info());
+                this.clients.add(c);
+                this.usertable.put( c.getClientName(), c );
+                this.client_info.put( c.getClientName(), c.getClientInfo() );
+                c.update_client_list(current_client_info);
             }
         }
     }
 
+    // Returns a list of all of the connected clients with their client_info
+    @SuppressWarnings("unchecked")
     public String all_client_info(){
         java.util.LinkedList<String> info = new java.util.LinkedList<String>();
         info.addAll( this.client_info.values() );
@@ -138,6 +141,8 @@ public class Server {
             return pk_string;
         }
 
+
+        @SuppressWarnings("unchecked")
         public String getClientInfo(){
             JSONObject obj = new JSONObject();
 
@@ -174,7 +179,7 @@ public class Server {
             }
         }
 
-        public String getName(){
+        public String getClientName(){
             return this.name;
         }
 
@@ -215,20 +220,25 @@ public class Server {
         }
 
         @SuppressWarnings("unchecked")
-        public void update_client_list(String client_info)
+        public void update_client_list(String clientInfoString)
         {
-            JSONObject obj = new JSONObject();
-            byte[] iv = Crypt.generateIV();
-            byte[] encrypted_info_b = Crypt.aes_encrypt(client_info.getBytes(), this.sessionKey, iv );
-            String encrypted_info = Crypt.base64encode( encrypted_info_b );
-            String sig = Crypt.base64encode( Crypt.generateMAC(client_info.getBytes(), this.sessionKey ));
-            
-            obj.put( "type", "list" );
-            obj.put( "data", encrypted_info );
-            obj.put( "sig", sig );
-            obj.put( "iv", Crypt.base64encode(iv) );
+            try{
+                JSONObject obj = new JSONObject();
+                byte[] iv = Crypt.generateIV();
+                byte[] encrypted_info_b = Crypt.aes_encrypt(clientInfoString.getBytes(), this.sessionKey, iv );
+                String encrypted_info = Crypt.base64encode( encrypted_info_b );
 
-            sendMessage(obj.toString());
+                String sig = Crypt.base64encode( Crypt.generateMAC(clientInfoString.getBytes(), this.sessionKey ) );
+
+                obj.put( "type", "list" );
+                obj.put( "data", encrypted_info );
+                obj.put( "sig", sig );
+                obj.put( "iv", Crypt.base64encode(iv) );
+
+                sendMessage(obj.toString());
+            }catch(Exception e){
+                System.out.println( "Could not update client list" );
+            }  
         }
 
         // challenge(): send a GREETING challenge to the connecting client to authenticate
@@ -314,16 +324,6 @@ public class Server {
             }else{
                 return false;
             }
-        }
-
-        // decrypt_greeting(): String -> JSONObject
-        // decrypts the greeting data (public key, password hash, salt)
-        // with the symmetric key
-        private JSONObject decrypt_greeting( String data ){
-            // String decrypted_greeting = Crypt.aes_decrypt( this.sessionKey, data );
-
-            // Decrypted greeting should be 
-            return null;
         }
 
         // parseMessage() : parse the message and return the "data" blob
