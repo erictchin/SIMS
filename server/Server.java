@@ -139,6 +139,8 @@ public class Server {
         this.usertable.remove( name );
         this.client_info.remove( name );
 
+        this.update_all_clients_lists();
+
         h.terminate();
         try{
             h.join();
