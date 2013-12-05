@@ -80,7 +80,7 @@ public class Server {
     }
 
     // Open a socket on given port to listen for GREETINGs and MESSAGEs
-    public void process(int port) throws Exception {
+    private void process(int port) throws Exception {
         ServerSocket server = new ServerSocket(port, 10);
         out.println("Server initialized...");
         while( true ) {
@@ -95,16 +95,26 @@ public class Server {
                 this.clients.add(c);
                 this.usertable.put( cName, c );
                 this.client_info.put( cName, c.getClientInfo() );
-                c.update_client_list(this.all_client_info());
+                this.update_all_clients_lists();
             }else{
                 System.out.println( "- could not authenticate user." );
             }
         }
     }
 
+    // Broadcast an new list of clients to every user
+    private void update_all_clients_lists(){
+        String client_infos = this.all_client_info();
+
+        for( java.util.Map.Entry<String, ClientHandler> entry : this.usertable.entrySet() ){
+            entry.getValue().update_client_list(client_infos);
+        }
+
+    }
+
     // Returns a list of all of the connected clients with their client_info
     @SuppressWarnings("unchecked")
-    public String all_client_info(){
+    private String all_client_info(){
         java.util.LinkedList<String> info = new java.util.LinkedList<String>();
         info.addAll( this.client_info.values() );
 
@@ -136,7 +146,7 @@ public class Server {
     }
 
     // broadcast -- sends the message to all users
-    public void broadcast( ClientHandler sender, String message ) {
+    private void broadcast( ClientHandler sender, String message ) {
         for ( ClientHandler c : clients )
             // if( ! sender.equals( c ) )
             c.sendMessage( message );

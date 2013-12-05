@@ -51,8 +51,15 @@ public class Client {
 
     public String getConnectedUsers(){
         java.lang.StringBuilder strb = new java.lang.StringBuilder();
-        for( String x : peers.keySet() ){
-            strb.append( "  " + x + "\n" );
+        String activeFlag = " *";
+        String inactiveFlag = "";
+        for( java.util.Map.Entry<String, Peer> entry : this.peers.entrySet() ){
+
+            String flag = inactiveFlag;
+            if( entry.getValue().isActive() ){
+                flag = activeFlag;
+            }
+            strb.append( "  " + entry.getKey() + flag + "\n" );
         }
 
         return strb.toString();
@@ -337,7 +344,7 @@ public class Client {
 
                     if( updateList( data, hmac, iv) ){
                         String s = "<server>: updated user list:\n" +
-                            "  " + getConnectedUsers();
+                            getConnectedUsers();
                         return s;
                     }
                 } 
@@ -449,6 +456,10 @@ public class Client {
             this.active = true;
 
 
+        }
+
+        public boolean isActive(){
+            return this.active;
         }
     }
 } 
