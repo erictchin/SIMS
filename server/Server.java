@@ -140,7 +140,8 @@ public class Server {
             return pk_string;
         }
 
-
+        // returns a stringified JSON object containing ip, port,
+        // name, and base64 encoded public key
         @SuppressWarnings("unchecked")
         public String getClientInfo(){
             JSONObject obj = new JSONObject();
@@ -218,6 +219,9 @@ public class Server {
             output.println( obj.toString() );
         }
 
+        //sends current list of valid clients and their information to this client.
+        //client_info is a JSON list object as a String
+        //client_info data is maintained in Server.client_info
         @SuppressWarnings("unchecked")
         public void update_client_list(String clientInfoString)
         {
