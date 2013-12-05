@@ -17,6 +17,7 @@ public class Client {
     private BufferedReader br;
 
     private Socket client;
+    private ServerSocket peer_listener;
     private String name;
     private String password;
 
@@ -58,6 +59,11 @@ public class Client {
         return strb.toString();
     }
 
+    public HashMap<String, Peer> client_getPeers()
+    {
+        return this.peers;
+    }
+
     // Construct a Client to handle user input and network communication
     public Client( String name, String ip, int port, String password ) throws Exception {
         this.name = name;
@@ -75,6 +81,7 @@ public class Client {
         }
 
         this.client  = new Socket(ip, port);
+        this.peer_listener = new ServerSocket(0);
 
         this.br = new BufferedReader( new InputStreamReader( client.getInputStream()) ) ;
         this.out = new PrintWriter(client.getOutputStream(),true);
@@ -88,7 +95,8 @@ public class Client {
             System.out.println( "Now starting listening threads" );
 
             new ChatThread().start();      // create thread to listen for user input
-            new MessagesThread().start();  // create thread for listening for messages
+            new MessagesThread().start();  // create thread for listening for server messages
+            new PeerListener(this.peer_listener).start();    // listen for incoming peer messages
         }else{
             System.out.println( "You could not be authenticated to the server." );
         }   
@@ -171,9 +179,11 @@ public class Client {
     @SuppressWarnings("unchecked")
     public void send_greeting(){
         JSONObject obj = new JSONObject();
+        int peer_port = this.peer_listener.getLocalPort();
 
         obj.put( "type", "greeting" );
         obj.put( "name", this.name );
+        obj.put( "peer_port", peer_port);
 
         // d1: ServerPub-encrypted symmetric key
         {
@@ -254,6 +264,7 @@ public class Client {
 
                     String ip = (String) client.get( "ip" );
                     String port = (String) client.get( "port" );
+                    String peer_port = (String) client.get( "peer_port" );
                     String name = (String) client.get( "name" );
                     String key_s = (String) client.get( "key" );
 
@@ -276,8 +287,68 @@ public class Client {
         }
     }
 
+    //thread listens to for new peer conversations
+    class PeerListener extends Thread {
+
+        private ServerSocket listener;
+
+        public PeerListener(ServerSocket listener)
+        {
+            this.listener = listener;
+        }
+
+        public void run(){
+            
+            while(true)
+            {
+
+                Socket incoming = listener.accept();
+                PeerAcceptor pa = new PeerAcceptor (incoming); 
+
+            }
+        }
+
+    }
     
     
+    class PeerAcceptor 
+    {
+        Socket new_socket;
+        BufferedReader input;
+        PrintWriter output;
+        
+        public PeerAcceptor (Socket s)
+        {
+            new_socket = s;
+            input = new BufferedReader( new InputStreamReader ( new_socket.getInputStream()));
+            output = new PrintWriter (new_socket.getOUtputStream(), true);
+            
+            String peer_info = input.readLine();
+
+            Object o = JSONValue.parse( peer_info );
+            JSONObject jo = (JSONObject) o;
+
+            Object hs = JSONValue.parse( jo.get("handshake") );
+            JSONObject hs_info = (JSONObject) hs; 
+
+            if( jo.get("type").equals("handshake") )
+            {
+                Peer pierre = lookup_peer(peer_info);
+                pierre.handshake(hs_info, input, output );
+            }
+        }
+
+        public Peer lookup_peer(JSONObject info)
+        {
+            String name = (String)info.get("name");
+            HashMap<String, Peer> peers = client_getPeers();
+
+            if(!peers.containsKey(name))
+                this.new_socket.close();
+
+            else return peers.get(name);
+        }
+    }
     
     // MessagesThread -- waits for messages from server
     class MessagesThread extends Thread {
@@ -371,6 +442,7 @@ public class Client {
         String name;
         String ip;
         String port;
+        String peer_port;
         PublicKey publicKey;
         SecretKey sessionKey;
         BufferedReader input;
@@ -378,10 +450,12 @@ public class Client {
         boolean active;
         boolean valid;
 
-        public Peer( String ip, String port, String name, PublicKey publicKey ){
+        public Peer(String ip, String port, String name, String peer_port, PublicKey publicKey )
+        {
             this.name = name;
             this.ip = ip;
             this.port = port;
+            this.peer_port = port;
             this.publicKey = publicKey;
 
             this.sessionKey = null;
@@ -390,6 +464,14 @@ public class Client {
 
             this.active = false;
             this.valid = false;
+        }
+
+        public void handshake(JSONObject hs_info, BufferedReader input, PrintWriter output)
+        {
+            
+
+
+
         }
 
         public void run(){

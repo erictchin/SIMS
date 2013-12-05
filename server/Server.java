@@ -127,6 +127,7 @@ public class Server {
         String name = "";
         String ip = "";
         String port = "";
+        String peer_port = "";
         PublicKey publicKey;
         SecretKey sessionKey;
         BufferedReader input;
@@ -148,6 +149,7 @@ public class Server {
 
             obj.put( "ip", this.ip );
             obj.put( "port", this.port );
+            obj.put( "peer_port", this.peer_port);
             obj.put( "name", this.name );
             obj.put( "key", this.getClientPublicKey() );
 
@@ -291,6 +293,7 @@ public class Server {
 
             if( a.get("type").equals("greeting") ){
                 this.name     = (String)a.get("name");
+                this.peer_port = (String)a.get("peer_port");
 
                 // Get the RSA-encrypted session key
                 {
