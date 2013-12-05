@@ -216,7 +216,7 @@ public class Client {
 
         obj.put( "type", "greeting" );
         obj.put( "name", this.name );
-        obj.put( "peer_port", peer_port);
+        obj.put( "peer_port", "" + peer_port);
 
         // d1: ServerPub-encrypted symmetric key
         {
