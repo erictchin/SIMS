@@ -321,19 +321,19 @@ public class Client {
         {
             new_socket = s;
             input = new BufferedReader( new InputStreamReader ( new_socket.getInputStream()));
-            output = new PrintWriter (new_socket.getOUtputStream(), true);
+            output = new PrintWriter (new_socket.getOutputStream(), true);
             
             String peer_info = input.readLine();
 
             Object o = JSONValue.parse( peer_info );
             JSONObject jo = (JSONObject) o;
 
-            Object hs = JSONValue.parse( jo.get("handshake") );
+            Object hs = JSONValue.parse( (String)jo.get("handshake") );
             JSONObject hs_info = (JSONObject) hs; 
 
             if( jo.get("type").equals("handshake") )
             {
-                Peer pierre = lookup_peer(peer_info);
+                Peer pierre = lookup_peer(jo);
                 pierre.handshake(hs_info, input, output );
             }
         }
