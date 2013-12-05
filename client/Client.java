@@ -266,6 +266,7 @@ public class Client {
             String my_hmac = Crypt.base64encode( Crypt.generateMAC( decrypted_data, this.sessionKey_server ) );
 
             if( my_hmac.equals( hmac ) ){
+                HashMap<String, Peer> newpeers = new HashMap<String, Peer>();
                 // confirmed the signature of the data
 
                 // 4. parse client_infos to get the real list
@@ -285,11 +286,27 @@ public class Client {
 
                     PublicKey key = Crypt.getPublicKeyFromBytes( Crypt.base64decode( key_s ) );
 
-                    if( this.peers.containsKey( name ) ){
-                    }else{
-                        Peer new_peer = new Peer( ip, port, name, key );
+                    newpeers.put( name, new Peer( ip, port, name, key ) );
+                }
 
-                        this.peers.put( name, new_peer );
+                // make sure that the proper peers are in my peer list.
+                // in particular, remove peers that I list but the server doesn't
+                // and add peers that the server lists and I don't
+
+                Set<String> currentPeerNames = this.peers.keySet();
+                Set<String> newPeerNames = newpeers.keySet();
+
+                for( String n : currentPeerNames ){
+                    // for all of my peers, if server doesn't list it, then remove it
+                    if( !newPeerNames.contains( n ) ){
+                        this.peers.remove( n );
+                    }
+                }
+
+                for( String n : newPeerNames ){
+                    // for all new peers, if i don't have it, then add it
+                    if( !this.peers.containsKey( n ) ){
+                        this.peers.put( n, newpeers.get( n ) );
                     }
                 }
 
