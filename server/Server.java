@@ -90,10 +90,14 @@ public class Server {
                 // if the client is valid, then we can:
                 // 1. add it to the list of clients
                 // 2. add it to the usertable
+                String cName = c.getClientName();
+
                 this.clients.add(c);
-                this.usertable.put( c.getClientName(), c );
-                this.client_info.put( c.getClientName(), c.getClientInfo() );
+                this.usertable.put( cName, c );
+                this.client_info.put( cName, c.getClientInfo() );
                 c.update_client_list(this.all_client_info());
+            }else{
+                System.out.println( "- could not authenticate user." );
             }
         }
     }
@@ -105,6 +109,11 @@ public class Server {
         info.addAll( this.client_info.values() );
 
         return JSONValue.toJSONString(info);
+    }
+
+    // Checks to make sure that the user is not already connected to the server
+    private boolean server_is_user_connected( String name ){
+        return this.usertable.containsKey( name );
     }
 
     private boolean server_verify_password( String name, String pw_hash, String pw_salt ){
@@ -330,6 +339,11 @@ public class Server {
 
             if( a.get("type").equals("greeting") ){
                 this.name = (String)a.get("name");
+
+                // If the user is already connected, do not authenticate
+                if( server_is_user_connected( this.name ) ){
+                    return false;
+                }
 
                 // Get the RSA-encrypted session key
                 {
