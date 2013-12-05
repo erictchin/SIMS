@@ -58,6 +58,10 @@ public class Client {
         return strb.toString();
     }
 
+    private String client_get_name(){
+        return this.name;
+    }
+
     // Construct a Client to handle user input and network communication
     public Client( String name, String ip, int port, String password ) throws Exception {
         this.name = name;
@@ -103,6 +107,28 @@ public class Client {
         obj.put( "data", data );
 
         return obj;
+    }
+
+    // Generates a logoff message with encrypted name
+    @SuppressWarnings("unchecked")
+    public JSONObject generateLogoff(){
+        JSONObject obj = new JSONObject();
+
+        obj.put( "type", "logoff" );
+
+        byte[] salt = Crypt.generateIV();
+        byte[] encrypted_name = Crypt.aes_encrypt(
+                this.name.getBytes(),
+                this.sessionKey_server,
+                salt );
+
+        obj.put( "name", Crypt.base64encode( encrypted_name ) );
+        obj.put( "salt", Crypt.base64encode( salt ) );
+
+        System.out.println( obj.toString() );
+
+        return obj;
+        
     }
 
     // We have authenticated the server, so now we need to send the proper
@@ -339,10 +365,11 @@ public class Client {
                 String message = msg.substring( space2 ).trim();
                 
                 System.out.println( "Sending : \"" + message + "\" to " + recipient );
-            }else if( test.startsWith( "logout" ) ){
+            }else if( test.startsWith( "logout" ) || test.startsWith( "logoff" ) || test.startsWith( "exit" ) ){
                 // Perform logout procedure
                 // 1. send server logout command
                 // 2. tell peers that i've disconnected?
+                out.println( generateLogoff() );
             }
         }
 

@@ -114,6 +114,18 @@ public class Server {
     } 
 
 
+    private void server_log_user_off( ClientHandler h, String name ){
+        System.out.println( "logged off user `" + name + "`" );
+        this.clients.remove( h );
+        this.usertable.remove( name );
+        this.client_info.remove( name );
+
+        h.terminate();
+        try{
+            h.join();
+        }catch( InterruptedException e ){}
+    }
+
     // broadcast -- sends the message to all users
     public void broadcast( ClientHandler sender, String message ) {
         for ( ClientHandler c : clients )
@@ -131,7 +143,9 @@ public class Server {
         SecretKey sessionKey;
         BufferedReader input;
         PrintWriter output;
+        Socket sock;
         boolean valid;
+        private volatile boolean running = true;
         
         public String getClientPublicKey(){
             byte[] pk_bytes = Crypt.getEncodedKey( this.publicKey );
@@ -154,11 +168,19 @@ public class Server {
             return obj.toString();
         }
 
+        public void terminate(){
+            try{
+                this.sock.close();
+            }catch( IOException e ){
+            }
+        }
+
         public ClientHandler( Socket client ) throws Exception {
             // get input and output streams
-            input = new BufferedReader( 
+            this.sock = client;
+            this.input = new BufferedReader( 
                     new InputStreamReader( client.getInputStream()) );
-            output = new PrintWriter ( client.getOutputStream(), true );
+            this.output = new PrintWriter ( client.getOutputStream(), true );
 
             if( authenticate( input.readLine() ) ){
                 System.out.println( "+ Authentication successful for: " + this.name );
@@ -217,6 +239,23 @@ public class Server {
             }   
  
             output.println( obj.toString() );
+        }
+
+        // Given a name (encrypted with the client-server session key, log the user off.
+        public void log_user_off( String encrypted_name, String salt ){
+            try{
+                 // 1. decrypt my username with session key and salt
+                 byte[] salt_b = Crypt.base64decode( salt );
+                 byte[] name_b = Crypt.base64decode( encrypted_name );
+
+                 byte[] name_d = Crypt.aes_decrypt( name_b, this.sessionKey, salt_b );
+
+                 if( new String( name_d ).equals( this.name ) ){
+                    this.running = false;
+                    server_log_user_off( this, this.name );
+                 }
+            }catch( Exception e ){
+            }
         }
 
         //sends current list of valid clients and their information to this client.
@@ -290,7 +329,7 @@ public class Server {
             JSONObject a = (JSONObject) o;
 
             if( a.get("type").equals("greeting") ){
-                this.name     = (String)a.get("name");
+                this.name = (String)a.get("name");
 
                 // Get the RSA-encrypted session key
                 {
@@ -343,6 +382,14 @@ public class Server {
                     
                     return "";
 
+                }else if( a.get("type").equals("logoff") ){
+                    System.out.println( "user has logged off" );
+
+                    String name = (String) a.get("name");
+                    String salt = (String) a.get("salt");
+                    this.log_user_off( name, salt );
+
+                    return "";
                 }else{
                     // client didn't send a proper message
                     return "";
@@ -377,7 +424,7 @@ public class Server {
         public void run()  {
             String message;
             try {
-                while(true)   {
+                while(this.running)   {
                     // Read and parse a MESSAGE from the client
                     message = input.readLine();
 
