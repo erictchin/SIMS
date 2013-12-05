@@ -371,8 +371,6 @@ public class Client {
 
                 // then send the server a list command
                 
-                System.out.println( "Get List from Server" );
-
                 out.println( generateMessage( "list", "" ) );
             }else if( test.startsWith( "send" ) ){
                 int space1 = msg.indexOf( " " );
@@ -387,6 +385,15 @@ public class Client {
                 // 1. send server logout command
                 // 2. tell peers that i've disconnected?
                 out.println( generateLogoff() );
+            }else if( test.startsWith( "help" ) ){
+                String commands = "Possible commands include: \n" +
+                    "  * `list` - updates list and displays connected peers\n" +
+                    "  * `send <peer> <message>` - sends <message> to peer named <peer>\n" +
+                    "  * `logoff` or `logout` or `exit` - will disconnect from the SIMS\n" + 
+                    "  * `help` - display this message\n";
+
+                System.out.println( commands );
+
             }
         }
 
@@ -400,8 +407,8 @@ public class Client {
                 while(true) {
                     line = scan.nextLine().trim();
 
-                    System.out.print( "> " );
                     message( line );
+                    System.out.print( "> " );
                 } 
             } catch(Exception e) { e.printStackTrace() ;}
         }
