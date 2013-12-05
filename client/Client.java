@@ -272,7 +272,7 @@ public class Client {
 
                     if( this.peers.containsKey( name ) ){
                     }else{
-                        Peer new_peer = new Peer( ip, port, name, key );
+                        Peer new_peer = new Peer( ip, port, name, peer_port, key );
 
                         this.peers.put( name, new_peer );
                     }
@@ -297,13 +297,18 @@ public class Client {
             this.listener = listener;
         }
 
-        public void run(){
+        public void run() 
+        {
             
             while(true)
             {
-
-                Socket incoming = listener.accept();
-                PeerAcceptor pa = new PeerAcceptor (incoming); 
+                try
+                {
+                    Socket incoming = listener.accept();
+                    PeerAcceptor pa = new PeerAcceptor (incoming); 
+                }
+                catch (IOException ioe) { }
+                
 
             }
         }
@@ -319,34 +324,32 @@ public class Client {
         
         public PeerAcceptor (Socket s)
         {
-            new_socket = s;
-            input = new BufferedReader( new InputStreamReader ( new_socket.getInputStream()));
-            output = new PrintWriter (new_socket.getOutputStream(), true);
+            try {
+                new_socket = s;
+                input = new BufferedReader( new InputStreamReader ( new_socket.getInputStream()));
+                output = new PrintWriter (new_socket.getOutputStream(), true);
             
-            String peer_info = input.readLine();
+                String peer_info = input.readLine();
 
-            Object o = JSONValue.parse( peer_info );
-            JSONObject jo = (JSONObject) o;
+                Object o = JSONValue.parse( peer_info );
+                JSONObject jo = (JSONObject) o;
 
-            Object hs = JSONValue.parse( (String)jo.get("handshake") );
-            JSONObject hs_info = (JSONObject) hs; 
+                Object hs = JSONValue.parse( (String)jo.get("handshake") );
+                JSONObject hs_info = (JSONObject) hs; 
 
-            if( jo.get("type").equals("handshake") )
-            {
-                Peer pierre = lookup_peer(jo);
-                pierre.handshake(hs_info, input, output );
+                if( jo.get("type").equals("handshake") )
+                {
+
+                    String name = (String)jo.get("name");
+                    HashMap<String, Peer> peers = client_getPeers();
+
+                    if(!peers.containsKey(name))
+                        this.new_socket.close();
+
+                    else peers.get(name).handshake(hs_info, input, output); 
+                }
             }
-        }
-
-        public Peer lookup_peer(JSONObject info)
-        {
-            String name = (String)info.get("name");
-            HashMap<String, Peer> peers = client_getPeers();
-
-            if(!peers.containsKey(name))
-                this.new_socket.close();
-
-            else return peers.get(name);
+            catch (IOException ioe) { }
         }
     }
     
