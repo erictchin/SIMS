@@ -347,6 +347,9 @@ public class Client {
                             getConnectedUsers();
                         return s;
                     }
+                    String s = "<server>: user list:\n" +
+                        getConnectedUsers();
+                    return s;
                 } 
             }
 
