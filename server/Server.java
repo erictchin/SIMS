@@ -98,6 +98,7 @@ public class Server {
                 this.update_all_clients_lists();
             }else{
                 System.out.println( "- could not authenticate user." );
+                c.reject();
             }
         }
     }
@@ -222,6 +223,10 @@ public class Server {
             }else{
                 valid = false;
             }
+        }
+
+        public void reject(){
+            this.output.println( "You could not be authenticated" );
         }
 
         public String getClientName(){
