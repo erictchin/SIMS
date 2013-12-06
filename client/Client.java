@@ -7,7 +7,6 @@ import java.net.*;
 import javax.crypto.*;
 import java.security.*;
 
-// import org.json.simple.JSONObject;
 import org.json.simple.*;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -103,6 +102,7 @@ public class Client {
 
         this.client  = new Socket(ip, port);
         this.peer_listener = new ServerSocket(0);
+        this.random = new SecureRandom();
 
         this.br = new BufferedReader( new InputStreamReader( client.getInputStream()) ) ;
         this.out = new PrintWriter(client.getOutputStream(),true);
@@ -113,7 +113,6 @@ public class Client {
         if( receive_greeting() ){
             // Successfully authenticated the server and sent challenge confirmation.
             System.out.println( "Successfully authenticated the server." );
-            System.out.println( "Now starting listening threads" );
 
             new ChatThread().start();      // create thread to listen for user input
             new MessagesThread().start();  // create thread for listening for server messages
@@ -121,6 +120,11 @@ public class Client {
         }else{
             System.out.println( "You could not be authenticated to the server." );
         }   
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            public void run() {
+                out.println( generateLogoff() );
+            }
+        });
     }
 
     // Abstracted method to generate messages of type with data (used for greeting and message)
@@ -150,8 +154,6 @@ public class Client {
         obj.put( "name", Crypt.base64encode( encrypted_name ) );
         obj.put( "salt", Crypt.base64encode( salt ) );
 
-        System.out.println( obj.toString() );
-
         return obj;
         
     }
@@ -172,7 +174,6 @@ public class Client {
     public boolean receive_greeting(){
         try{
             String server_greeting = br.readLine();
-            System.out.println("Received greeting from server: " + server_greeting);
             Object o = JSONValue.parse( server_greeting );
             JSONObject a = (JSONObject) o;
 
@@ -279,6 +280,7 @@ public class Client {
     }
 
     // update the list of other clients with information from the server
+    @SuppressWarnings("unchecked")
     public boolean updateList( String data, String hmac, String iv_s ){
 
         try{
@@ -406,11 +408,11 @@ public class Client {
                     String name = (String)jo.get("name");
                     HashMap<String, Peer> peers = client_getPeers();
 
-                    if(!peers.containsKey(name))
-                        this.new_socket.close();
-
-                    if(!peers.get(name).authenticate(hs_info, input, output)) 
-                        this.new_socket.close();
+                    if(peers.containsKey(name)){
+                        if( peers.get(name).challenge_handshake( hs_info, input, output, new_socket ) ){
+                            peers.get(name).start();
+                        }
+                    }
                 }
             }
             catch (IOException ioe) { }
@@ -480,15 +482,17 @@ public class Client {
                 
                 HashMap<String, Peer> peers = client_getPeers();
 
-                if( peers.containsKey( recipient ) ){
+                if( client_get_name().equals( recipient ) ){
+
+                    System.out.println( "  Error: you cannot send yourself a message." );
+                }else if( peers.containsKey( recipient ) ){
                     Peer receiver = peers.get( recipient );
 
                     if( receiver.isActive() ){
                         receiver.sendMessage( message );
-                        System.out.println( "sent message to " + recipient );
                     }else{
                         receiver.init_handshake();
-                        System.out.println( recipient + " is not active" );
+                        receiver.sendMessage( message );
                     }
                 }else{
                     System.out.println( "  Error: user " + recipient + " is not valid." );
@@ -500,6 +504,7 @@ public class Client {
                 // 1. send server logout command
                 // 2. tell peers that i've disconnected?
                 out.println( generateLogoff() );
+                System.exit(0);
             }else if( test.startsWith( "help" ) ){
                 String commands = "Possible commands include: \n" +
                     "  * `list` - updates list and displays connected peers\n" +
@@ -553,7 +558,7 @@ public class Client {
             this.name = name;
             this.ip = ip;
             this.port = port;
-            this.peer_port = port;
+            this.peer_port = peer_port;
             this.publicKey = publicKey;
 
             this.sessionKey = null;
@@ -567,40 +572,49 @@ public class Client {
         //build and send initial handshake information
         // { type : handshake, name : name, conn_info : conn_info }
         // conn_info is { key : PuB{KAB}, nonce : KAB{RA}, iv : iv }
-        public boolean init_handshake()
+        @SuppressWarnings("unchecked")
+        public void init_handshake()
         {
-            this.socket = new Socket(this.ip, Integer.parseInt(this.port));
-            this.input = new BufferedReader( new InputStreamReader( socket.getInputStream()));
-            this.output = new PrintWriter( this.socket.getOutputStream(), true );
+            try{
+                this.socket = new Socket(this.ip, Integer.parseInt(this.peer_port));
+                // System.out.println("New socket to : " + this.ip + ", " + this.peer_port);
+                this.input = new BufferedReader( new InputStreamReader( this.socket.getInputStream()));
+                this.output = new PrintWriter( this.socket.getOutputStream(), true );
 
-            JSONObject obj = new JSONObject();
-            JSONObject conn_info = new JSONObject();
-            obj.put( "type", "handshake" );
-            obj.put( "name", client_get_name() );
+                JSONObject obj = new JSONObject();
+                JSONObject conn_info = new JSONObject();
+                obj.put( "type", "handshake" );
+                obj.put( "name", client_get_name() );
 
-            this.sessionKey = Crypt.generateAESKey();
-            byte[] encoded_sk = Crypt.getEncodedKey( this.sessionKey );
-            byte[] encrypted_sk = Crypt.rsa_encrypt( encoded_sk, this.publicKey );
-            conn_info.put( "key", Crypt.base64encode( encrypted_sk );
+                this.sessionKey = Crypt.generateAESKey();
+                byte[] encoded_sk = Crypt.getEncodedKey( this.sessionKey );
+                byte[] encrypted_sk = Crypt.rsa_encrypt( encoded_sk, this.publicKey );
+                conn_info.put( "key", Crypt.base64encode( encrypted_sk ));
 
-            byte[] iv = Crypt.generateIV();
-            conn_info.put( "iv", base64encode(iv) );
+                byte[] iv = Crypt.generateIV();
+                conn_info.put( "iv", Crypt.base64encode(iv) );
 
-            Integer r = client_get_nonce();
-            byte[] ra = base64decode( "" + r );
-            byte[] encrypted_nonce = Crypt.aes_encrypt( ra, this.sessionKey, iv ); 
-            conn_info.put( "nonce", base64encode(encrypted_nonce) );
+                Integer r = client_get_nonce();
+                byte[] ra = r.toString().getBytes();
+                byte[] encrypted_nonce = Crypt.aes_encrypt( ra, this.sessionKey, iv ); 
+                conn_info.put( "nonce", Crypt.base64encode(encrypted_nonce) );
 
-            obj.put( "conn_info", conn_info.toString() );
+                obj.put( "conn_info", conn_info.toString() );
 
-            this.output.println( obj.toString() );
+                // System.out.println("Sending: " + obj.toString() );
+                this.output.println( obj.toString() );
 
-            if(recv_challenge(ra))
-                this.valid = true;
+                if(recv_challenge(ra))
+                {
+                    this.active = true;
+                    this.start();
+                }
+            }catch(Exception e){ e.printStackTrace(); }
         }
 
         //waits for response from peer 
         //A ← B: PuA{RB}, KAB{h1(RA)} 
+        @SuppressWarnings("unchecked")
         public boolean recv_challenge(byte[] ra)
         {
             try
@@ -609,6 +623,8 @@ public class Client {
                 Object o = JSONValue.parse( recvbuf );
                 JSONObject jo = (JSONObject) o;
 
+                // System.out.println("Received challenge:  " + jo.toString());
+
                 String type = (String) jo.get("type");
                 String encoded_encrypted_rb = (String) jo.get("rb");
                 String encoded_ra_salt = (String) jo.get("ra_salt");
@@ -616,7 +632,6 @@ public class Client {
                 
                 if(type.equals("peer_challenge"))
                 {
-
                     byte[] encrypted_rb = Crypt.base64decode( encoded_encrypted_rb );
                     byte[] rb = Crypt.rsa_decrypt( encrypted_rb, client_get_privateKey() );
 
@@ -625,16 +640,30 @@ public class Client {
                     
                     byte[] hashed_ra = Crypt.aes_decrypt(encrypted_hashed_ra, this.sessionKey, salt);
 
-                    String enc_ra = Crypt.base64encode(ra);
-                    String enc_rb = Crypt.base64encode(rb);
+                    String enc_ra = new String(ra, "UTF-8");
+                    String enc_rb = new String(rb, "UTF-8");
                 
                     String my_ra_hash = Crypt.sha256hex( enc_ra );
+
+                    // System.out.println("hash stuff built");
                 
-                    if( my_ra_hash.equals(Crypt.base64encode(hashed_ra)))
+                    if( my_ra_hash.equals(new String(hashed_ra, "UTF-8"))){
+
+                        // System.out.println("nonces are equal");
                         send_nonces(enc_ra, enc_rb);
+
+                        // System.out.println("nonces sent");
+
+                        return true;
+                    }
                 }
+            }
+            catch (IOException ioe) {} 
+
+            return false;
         }
 
+        @SuppressWarnings("unchecked")
         public void send_nonces(String ra, String rb)
         {
             JSONObject jo = new JSONObject();
@@ -648,8 +677,10 @@ public class Client {
         //A ← B: PuA{RB}, KAB{h1(RA)} 
         //A → B: h2(RA, RB)
         @SuppressWarnings("unchecked")
-        public boolean challenge_hs(JSONObject hs_info, BufferedReader input, PrintWriter output)
+        public boolean challenge_handshake(JSONObject hs_info, BufferedReader input, PrintWriter output, Socket s)
         {
+            this.socket = s;
+            // System.out.println("Received handshake request");
             String encoded_encrypted_skey = (String) hs_info.get("key");
             String encoded_encrypted_nonce = (String) hs_info.get("nonce");
 
@@ -670,21 +701,25 @@ public class Client {
             {
                 this.output = output;
                 this.input = input;
-                this.valid = true;
+                this.active = true;
             }
             return valid;
         }
 
         public boolean challenge(byte[] nonce, BufferedReader input, PrintWriter output)
         {
-            Integer r = client_get_nonce();
-            String rb = "" + r;
-            String ra = Crypt.base64encode(nonce);
+            try 
+            {
+                Integer r = client_get_nonce();
+                String rb = "" + r;
+                String ra = new String(nonce, "UTF-8");
             
-            send_challenge(rb, ra, output);
+                send_challenge(rb, ra, output);
     
-            if(validate_challenge(rb, ra, input)) return true;
-            else return false;
+                if(validate_challenge(rb, ra, input)) return true;
+                else return false;
+            }
+            catch (Exception e) { return false; } 
         }
 
         @SuppressWarnings("unchecked")
@@ -760,7 +795,8 @@ public class Client {
 
                 output.println( obj.toString() );
             }catch(Exception e){
-                System.out.println( "Error sending message to <" + this.name + ">." );
+                e.printStackTrace();
+                System.out.println( "  Error sending message to <" + this.name + ">." );
             }
         }
 
