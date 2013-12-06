@@ -102,6 +102,7 @@ public class Client {
 
         this.client  = new Socket(ip, port);
         this.peer_listener = new ServerSocket(0);
+        this.random = new SecureRandom();
 
         this.br = new BufferedReader( new InputStreamReader( client.getInputStream()) ) ;
         this.out = new PrintWriter(client.getOutputStream(),true);
@@ -573,6 +574,7 @@ public class Client {
         {
             try{
                 this.socket = new Socket(this.ip, Integer.parseInt(this.peer_port));
+                System.out.println("New socket to : " + this.ip + ", " + this.peer_port);
                 this.input = new BufferedReader( new InputStreamReader( socket.getInputStream()));
                 this.output = new PrintWriter( this.socket.getOutputStream(), true );
 
@@ -590,12 +592,13 @@ public class Client {
                 conn_info.put( "iv", Crypt.base64encode(iv) );
 
                 Integer r = client_get_nonce();
-                byte[] ra = Crypt.base64decode( "" + r );
+                byte[] ra = r.toString().getBytes();
                 byte[] encrypted_nonce = Crypt.aes_encrypt( ra, this.sessionKey, iv ); 
                 conn_info.put( "nonce", Crypt.base64encode(encrypted_nonce) );
 
                 obj.put( "conn_info", conn_info.toString() );
 
+                System.out.println("Sending: " + obj.toString() );
                 this.output.println( obj.toString() );
 
                 if(recv_challenge(ra))
@@ -621,7 +624,6 @@ public class Client {
                 
                 if(type.equals("peer_challenge"))
                 {
-
                     byte[] encrypted_rb = Crypt.base64decode( encoded_encrypted_rb );
                     byte[] rb = Crypt.rsa_decrypt( encrypted_rb, client_get_privateKey() );
 
@@ -663,6 +665,7 @@ public class Client {
         @SuppressWarnings("unchecked")
         public boolean challenge_handshake(JSONObject hs_info, BufferedReader input, PrintWriter output)
         {
+            System.out.println("Received handshake request");
             String encoded_encrypted_skey = (String) hs_info.get("key");
             String encoded_encrypted_nonce = (String) hs_info.get("nonce");
 
