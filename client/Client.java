@@ -488,7 +488,8 @@ public class Client {
                         System.out.println( "sent message to " + recipient );
                     }else{
                         receiver.init_handshake();
-                        System.out.println( recipient + " is not active" );
+                        receiver.sendMessage( message );
+                        // System.out.println( recipient + " is not active" );
                     }
                 }else{
                     System.out.println( "  Error: user " + recipient + " is not valid." );
@@ -553,7 +554,7 @@ public class Client {
             this.name = name;
             this.ip = ip;
             this.port = port;
-            this.peer_port = port;
+            this.peer_port = peer_port;
             this.publicKey = publicKey;
 
             this.sessionKey = null;
@@ -571,7 +572,7 @@ public class Client {
         public void init_handshake()
         {
             try{
-                this.socket = new Socket(this.ip, Integer.parseInt(this.port));
+                this.socket = new Socket(this.ip, Integer.parseInt(this.peer_port));
                 this.input = new BufferedReader( new InputStreamReader( socket.getInputStream()));
                 this.output = new PrintWriter( this.socket.getOutputStream(), true );
 
@@ -599,7 +600,7 @@ public class Client {
 
                 if(recv_challenge(ra))
                     this.valid = true;
-            }catch(Exception e){}
+            }catch(Exception e){ e.printStackTrace(); }
         }
 
         //waits for response from peer 
@@ -772,6 +773,7 @@ public class Client {
 
                 output.println( obj.toString() );
             }catch(Exception e){
+                e.printStackTrace();
                 System.out.println( "Error sending message to <" + this.name + ">." );
             }
         }
