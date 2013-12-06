@@ -7,7 +7,6 @@ import java.net.*;
 import javax.crypto.*;
 import java.security.*;
 
-// import org.json.simple.JSONObject;
 import org.json.simple.*;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -279,6 +278,7 @@ public class Client {
     }
 
     // update the list of other clients with information from the server
+    @SuppressWarnings("unchecked")
     public boolean updateList( String data, String hmac, String iv_s ){
 
         try{
@@ -567,6 +567,7 @@ public class Client {
         //build and send initial handshake information
         // { type : handshake, name : name, conn_info : conn_info }
         // conn_info is { key : PuB{KAB}, nonce : KAB{RA}, iv : iv }
+        @SuppressWarnings("unchecked")
         public boolean init_handshake()
         {
             this.socket = new Socket(this.ip, Integer.parseInt(this.port));
@@ -584,12 +585,12 @@ public class Client {
             conn_info.put( "key", Crypt.base64encode( encrypted_sk ));
 
             byte[] iv = Crypt.generateIV();
-            conn_info.put( "iv", base64encode(iv) );
+            conn_info.put( "iv", Crypt.base64encode(iv) );
 
             Integer r = client_get_nonce();
-            byte[] ra = base64decode( "" + r );
+            byte[] ra = Crypt.base64decode( "" + r );
             byte[] encrypted_nonce = Crypt.aes_encrypt( ra, this.sessionKey, iv ); 
-            conn_info.put( "nonce", base64encode(encrypted_nonce) );
+            conn_info.put( "nonce", Crypt.base64encode(encrypted_nonce) );
 
             obj.put( "conn_info", conn_info.toString() );
 
@@ -601,6 +602,7 @@ public class Client {
 
         //waits for response from peer 
         //A ← B: PuA{RB}, KAB{h1(RA)} 
+        @SuppressWarnings("unchecked")
         public boolean recv_challenge(byte[] ra)
         {
             try
@@ -637,6 +639,7 @@ public class Client {
             catch (IOException ioe) {} 
         }
 
+        @SuppressWarnings("unchecked")
         public void send_nonces(String ra, String rb)
         {
             JSONObject jo = new JSONObject();
