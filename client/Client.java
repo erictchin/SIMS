@@ -150,8 +150,6 @@ public class Client {
         obj.put( "name", Crypt.base64encode( encrypted_name ) );
         obj.put( "salt", Crypt.base64encode( salt ) );
 
-        System.out.println( obj.toString() );
-
         return obj;
         
     }
@@ -502,6 +500,7 @@ public class Client {
                 // 1. send server logout command
                 // 2. tell peers that i've disconnected?
                 out.println( generateLogoff() );
+                System.exit(0);
             }else if( test.startsWith( "help" ) ){
                 String commands = "Possible commands include: \n" +
                     "  * `list` - updates list and displays connected peers\n" +
@@ -694,7 +693,7 @@ public class Client {
             {
                 this.output = output;
                 this.input = input;
-                this.valid = true;
+                this.active = true;
             }
             return valid;
         }
