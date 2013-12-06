@@ -617,6 +617,8 @@ public class Client {
                 Object o = JSONValue.parse( recvbuf );
                 JSONObject jo = (JSONObject) o;
 
+                System.out.println("Received challenge:  " + jo.toString());
+
                 String type = (String) jo.get("type");
                 String encoded_encrypted_rb = (String) jo.get("rb");
                 String encoded_ra_salt = (String) jo.get("ra_salt");
@@ -632,13 +634,19 @@ public class Client {
                     
                     byte[] hashed_ra = Crypt.aes_decrypt(encrypted_hashed_ra, this.sessionKey, salt);
 
-                    String enc_ra = Crypt.base64encode(ra);
-                    String enc_rb = Crypt.base64encode(rb);
+                    String enc_ra = new String(ra, "UTF-8");
+                    String enc_rb = new String(rb, "UTF-8");
                 
                     String my_ra_hash = Crypt.sha256hex( enc_ra );
+
+                    System.out.println("hash stuff built");
                 
-                    if( my_ra_hash.equals(Crypt.base64encode(hashed_ra))){
+                    if( my_ra_hash.equals(new String(hashed_ra, "UTF-8"))){
+
+                        System.out.println("nonces are equal");
                         send_nonces(enc_ra, enc_rb);
+
+                        System.out.println("nonces sent");
 
                         return true;
                     }
@@ -693,14 +701,18 @@ public class Client {
 
         public boolean challenge(byte[] nonce, BufferedReader input, PrintWriter output)
         {
-            Integer r = client_get_nonce();
-            String rb = "" + r;
-            String ra = Crypt.base64encode(nonce);
+            try 
+            {
+                Integer r = client_get_nonce();
+                String rb = "" + r;
+                String ra = new String(nonce, "UTF-8");
             
-            send_challenge(rb, ra, output);
+                send_challenge(rb, ra, output);
     
-            if(validate_challenge(rb, ra, input)) return true;
-            else return false;
+                if(validate_challenge(rb, ra, input)) return true;
+                else return false;
+            }
+            catch (Exception e) { return false; } 
         }
 
         @SuppressWarnings("unchecked")
