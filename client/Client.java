@@ -168,6 +168,7 @@ public class Client {
         out.println( obj.toString() );
     }
 
+    @SuppressWarnings("unchecked")
     public boolean receive_greeting(){
         try{
             String server_greeting = br.readLine();
@@ -383,6 +384,7 @@ public class Client {
         BufferedReader input;
         PrintWriter output;
         
+        @SuppressWarnings("unchecked")
         public PeerAcceptor (Socket s)
         {
             try {
@@ -418,6 +420,7 @@ public class Client {
     // MessagesThread -- waits for messages from server
     class MessagesThread extends Thread {
         // parseMessage() : parses an INCOMING message from the server
+        @SuppressWarnings("unchecked")
         public String parseMessage( String msg ){
             if( msg != null ){
                 Object o = JSONValue.parse( msg );
@@ -475,7 +478,22 @@ public class Client {
                 String recipient = test.substring( space1, space2 ).trim();
                 String message = msg.substring( space2 ).trim();
                 
-                System.out.println( "Sending : \"" + message + "\" to " + recipient );
+                HashMap<String, Peer> peers = client_getPeers();
+
+                if( peers.containsKey( recipient ) ){
+                    Peer receiver = peers.get( recipient );
+
+                    if( receiver.isActive() ){
+                        receiver.sendMessage( message );
+                        System.out.println( "sent message to " + recipient );
+                    }else{
+                        System.out.println( recipient + " is not active" );
+                    }
+                }else{
+                    System.out.println( "  Error: user " + recipient + " is not valid." );
+                }
+
+
             }else if( test.startsWith( "logout" ) || test.startsWith( "logoff" ) || test.startsWith( "exit" ) ){
                 // Perform logout procedure
                 // 1. send server logout command
@@ -545,6 +563,7 @@ public class Client {
         //A → B: PuB{KAB}, KAB{RA} 
         //A ← B: PuA{RB}, KAB{h1(RA)} 
         //A → B: h2(RA, RB)
+        @SuppressWarnings("unchecked")
         public boolean handshake(JSONObject hs_info, BufferedReader input, PrintWriter output)
         {
             String encoded_encrypted_skey = (String) hs_info.get("key");
@@ -583,6 +602,7 @@ public class Client {
             else return false;
         }
 
+        @SuppressWarnings("unchecked")
         public void send_challenge(String n, String ra, PrintWriter output)
         {
             JSONObject obj = new JSONObject();
@@ -601,6 +621,7 @@ public class Client {
             output.println(obj.toString());
         }
 
+        @SuppressWarnings("unchecked")
         public boolean validate_challenge(String rb, String ra, BufferedReader input)
         {
             String valid_hash = Crypt.sha256hex ( ra + rb );
@@ -620,15 +641,85 @@ public class Client {
 
         public void run(){
             // First, set this to active.
-
             this.active = true;
+            String msg;
+            try {
+                while(active) {
+                    msg = this.input.readLine();
+                    msg = parseMessage( msg );
 
-
+                    if( msg.length() > 0 ){
+                        System.out.println( "\n<" + this.name + ">: " + msg );
+                        System.out.print( "\n> " );
+                    }
+                } 
+            } catch(Exception e) {}
         }
 
+        @SuppressWarnings("unchecked")
+        public void sendMessage(String msg){
+            JSONObject obj = new JSONObject();
+
+            try{ 
+                byte[] salt_b = Crypt.generateIV();
+                String encrypted_msg = Crypt.base64encode(
+                        Crypt.aes_encrypt( msg.getBytes(), this.sessionKey, salt_b ) );
+                String hmac = Crypt.base64encode( Crypt.generateMAC( msg.getBytes(),
+                            this.sessionKey ) );
+
+                obj.put( "type", "send" );
+                obj.put( "data", encrypted_msg );
+                obj.put( "sig", hmac );
+                obj.put( "iv", Crypt.base64encode( salt_b ) );
+
+
+                output.println( obj.toString() );
+            }catch(Exception e){
+                System.out.println( "Error sending message to <" + this.name + ">." );
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        public String parseMessage( String msg ){
+            if( msg != null ){
+                Object o = JSONValue.parse( msg );
+                JSONObject a = (JSONObject) o;
+
+                if( a.get("type").equals("send" ) ){
+                    String data = (String)a.get("data");
+                    String hmac = (String)a.get("sig");
+                    String iv_s = (String)a.get("iv");
+
+                    try{
+                        byte[] iv = Crypt.base64decode( iv_s );
+                        // 1. base64decode data
+                        byte[] data_b = Crypt.base64decode( data );
+                        // 2. decrypt data using session key with server
+                        byte[] decrypted_data = Crypt.aes_decrypt( 
+                                data_b, this.sessionKey, iv );
+                        // 3. verify signature of decrypted data with hmac
+                        String real_data = new String(decrypted_data);
+
+                        // calculate hmac and compare it with hmac
+                        String my_hmac = Crypt.base64encode( 
+                                Crypt.generateMAC( decrypted_data, this.sessionKey ) );
+
+                        if( my_hmac.equals( hmac ) ){
+                            // confirmed the signature of the data
+
+                            return real_data;
+                        }
+                    }catch(Exception e){}
+
+                } 
+            }
+
+            return "";
+        }
         public boolean isActive(){
             return this.active;
         }
+
     }
 } 
 
