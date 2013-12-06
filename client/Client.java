@@ -482,7 +482,10 @@ public class Client {
                 
                 HashMap<String, Peer> peers = client_getPeers();
 
-                if( peers.containsKey( recipient ) ){
+                if( client_get_name().equals( recipient ) ){
+
+                    System.out.println( "  Error: you cannot send yourself a message." );
+                }else if( peers.containsKey( recipient ) ){
                     Peer receiver = peers.get( recipient );
 
                     if( receiver.isActive() ){
@@ -574,7 +577,7 @@ public class Client {
         {
             try{
                 this.socket = new Socket(this.ip, Integer.parseInt(this.peer_port));
-                System.out.println("New socket to : " + this.ip + ", " + this.peer_port);
+                // System.out.println("New socket to : " + this.ip + ", " + this.peer_port);
                 this.input = new BufferedReader( new InputStreamReader( this.socket.getInputStream()));
                 this.output = new PrintWriter( this.socket.getOutputStream(), true );
 
@@ -598,7 +601,7 @@ public class Client {
 
                 obj.put( "conn_info", conn_info.toString() );
 
-                System.out.println("Sending: " + obj.toString() );
+                // System.out.println("Sending: " + obj.toString() );
                 this.output.println( obj.toString() );
 
                 if(recv_challenge(ra))
@@ -620,7 +623,7 @@ public class Client {
                 Object o = JSONValue.parse( recvbuf );
                 JSONObject jo = (JSONObject) o;
 
-                System.out.println("Received challenge:  " + jo.toString());
+                // System.out.println("Received challenge:  " + jo.toString());
 
                 String type = (String) jo.get("type");
                 String encoded_encrypted_rb = (String) jo.get("rb");
@@ -642,14 +645,14 @@ public class Client {
                 
                     String my_ra_hash = Crypt.sha256hex( enc_ra );
 
-                    System.out.println("hash stuff built");
+                    // System.out.println("hash stuff built");
                 
                     if( my_ra_hash.equals(new String(hashed_ra, "UTF-8"))){
 
-                        System.out.println("nonces are equal");
+                        // System.out.println("nonces are equal");
                         send_nonces(enc_ra, enc_rb);
 
-                        System.out.println("nonces sent");
+                        // System.out.println("nonces sent");
 
                         return true;
                     }
@@ -677,7 +680,7 @@ public class Client {
         public boolean challenge_handshake(JSONObject hs_info, BufferedReader input, PrintWriter output, Socket s)
         {
             this.socket = s;
-            System.out.println("Received handshake request");
+            // System.out.println("Received handshake request");
             String encoded_encrypted_skey = (String) hs_info.get("key");
             String encoded_encrypted_nonce = (String) hs_info.get("nonce");
 
