@@ -409,7 +409,7 @@ public class Client {
                     if(!peers.containsKey(name))
                         this.new_socket.close();
 
-                    if(!peers.get(name).authenticate(hs_info, input, output)) 
+                    if(!peers.get(name).challenge_handshake(hs_info, input, output)) 
                         this.new_socket.close();
                 }
             }
@@ -584,7 +584,7 @@ public class Client {
             conn_info.put( "key", Crypt.base64encode( encrypted_sk ));
 
             byte[] iv = Crypt.generateIV();
-            conn_info.put( "iv", base64encode(iv) );
+            conn_info.put( "iv", Crypt.base64encode(iv) );
 
             Integer r = client_get_nonce();
             byte[] ra = base64decode( "" + r );
@@ -650,7 +650,7 @@ public class Client {
         //A ← B: PuA{RB}, KAB{h1(RA)} 
         //A → B: h2(RA, RB)
         @SuppressWarnings("unchecked")
-        public boolean challenge_hs(JSONObject hs_info, BufferedReader input, PrintWriter output)
+        public boolean challenge_handshake(JSONObject hs_info, BufferedReader input, PrintWriter output)
         {
             String encoded_encrypted_skey = (String) hs_info.get("key");
             String encoded_encrypted_nonce = (String) hs_info.get("nonce");
