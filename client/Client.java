@@ -404,11 +404,12 @@ public class Client {
                     String name = (String)jo.get("name");
                     HashMap<String, Peer> peers = client_getPeers();
 
-                    if(!peers.containsKey(name))
-                        this.new_socket.close();
-
-                    if(!peers.get(name).challenge_handshake(hs_info, input, output)) 
-                        this.new_socket.close();
+                    if(peers.containsKey(name)){
+                        if( peers.get(name).challenge_handshake( hs_info, input, output, new_socket ) ){
+                            peers.get(name).start();
+                            System.out.println( "successful handshake" );
+                        }
+                    }
                 }
             }
             catch (IOException ioe) { }
@@ -573,7 +574,7 @@ public class Client {
             try{
                 this.socket = new Socket(this.ip, Integer.parseInt(this.peer_port));
                 System.out.println("New socket to : " + this.ip + ", " + this.peer_port);
-                this.input = new BufferedReader( new InputStreamReader( socket.getInputStream()));
+                this.input = new BufferedReader( new InputStreamReader( this.socket.getInputStream()));
                 this.output = new PrintWriter( this.socket.getOutputStream(), true );
 
                 JSONObject obj = new JSONObject();
@@ -600,7 +601,10 @@ public class Client {
                 this.output.println( obj.toString() );
 
                 if(recv_challenge(ra))
-                    this.valid = true;
+                {
+                    this.active = true;
+                    this.start();
+                }
             }catch(Exception e){ e.printStackTrace(); }
         }
 
@@ -669,8 +673,9 @@ public class Client {
         //A ← B: PuA{RB}, KAB{h1(RA)} 
         //A → B: h2(RA, RB)
         @SuppressWarnings("unchecked")
-        public boolean challenge_handshake(JSONObject hs_info, BufferedReader input, PrintWriter output)
+        public boolean challenge_handshake(JSONObject hs_info, BufferedReader input, PrintWriter output, Socket s)
         {
+            this.socket = s;
             System.out.println("Received handshake request");
             String encoded_encrypted_skey = (String) hs_info.get("key");
             String encoded_encrypted_nonce = (String) hs_info.get("nonce");
@@ -769,6 +774,7 @@ public class Client {
 
         @SuppressWarnings("unchecked")
         public void sendMessage(String msg){
+            System.out.println( "   " + msg );
             JSONObject obj = new JSONObject();
 
             try{ 
@@ -794,6 +800,7 @@ public class Client {
         @SuppressWarnings("unchecked")
         public String parseMessage( String msg ){
             if( msg != null ){
+                System.out.println( "Received message " + msg );
                 Object o = JSONValue.parse( msg );
                 JSONObject a = (JSONObject) o;
 
