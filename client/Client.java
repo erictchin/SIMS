@@ -136,6 +136,7 @@ public class Client {
             new PeerListener(this.peer_listener).start();    // listen for incoming peer messages
         }else{
             System.out.println( "You could not be authenticated to the server." );
+            System.exit(0);
         }   
         Runtime.getRuntime().addShutdownHook(new Thread() {
             public void run() {
