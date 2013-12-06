@@ -581,7 +581,7 @@ public class Client {
             this.sessionKey = Crypt.generateAESKey();
             byte[] encoded_sk = Crypt.getEncodedKey( this.sessionKey );
             byte[] encrypted_sk = Crypt.rsa_encrypt( encoded_sk, this.publicKey );
-            conn_info.put( "key", Crypt.base64encode( encrypted_sk );
+            conn_info.put( "key", Crypt.base64encode( encrypted_sk ));
 
             byte[] iv = Crypt.generateIV();
             conn_info.put( "iv", base64encode(iv) );
@@ -633,6 +633,8 @@ public class Client {
                     if( my_ra_hash.equals(Crypt.base64encode(hashed_ra)))
                         send_nonces(enc_ra, enc_rb);
                 }
+            }
+            catch (IOException ioe) {} 
         }
 
         public void send_nonces(String ra, String rb)
