@@ -25,6 +25,7 @@ public class Client {
     private PrivateKey privateKey;
     private PublicKey serverKey;
     private SecretKey sessionKey_server;
+    private SecureRandom random;
 
     private HashMap<String, Peer> peers;
 
@@ -73,6 +74,15 @@ public class Client {
     public HashMap<String, Peer> client_getPeers()
     {
         return this.peers;
+    }
+
+    public PublicKey client_get_publicKey() { return this.publicKey; }
+    public PrivateKey client_get_privateKey() { return this.privateKey; }
+    public Integer client_get_nonce() 
+    {
+        byte[] r = new byte[4];
+        random.nextBytes(r);
+        return new Integer(Math.abs(java.nio.ByteBuffer.wrap(r).getInt()));
     }
 
     // Construct a Client to handle user input and network communication
@@ -397,7 +407,8 @@ public class Client {
                     if(!peers.containsKey(name))
                         this.new_socket.close();
 
-                    else peers.get(name).handshake(hs_info, input, output); 
+                    if(!peers.get(name).handshake(hs_info, input, output)) 
+                        this.new_socket.close();
                 }
             }
             catch (IOException ioe) { }
@@ -531,12 +542,80 @@ public class Client {
             this.valid = false;
         }
 
-        public void handshake(JSONObject hs_info, BufferedReader input, PrintWriter output)
+        //A → B: PuB{KAB}, KAB{RA} 
+        //A ← B: PuA{RB}, KAB{h1(RA)} 
+        //A → B: h2(RA, RB)
+        public boolean handshake(JSONObject hs_info, BufferedReader input, PrintWriter output)
         {
+            String encoded_encrypted_skey = (String) hs_info.get("key");
+            String encoded_encrypted_nonce = (String) hs_info.get("nonce");
+
+            String encoded_iv = (String) hs_info.get("iv");
+            byte[] iv = Crypt.base64decode(encoded_iv);
+
+            byte[] encrypted_skey = Crypt.base64decode( encoded_encrypted_skey );
+            byte[] encoded_skey = Crypt.rsa_decrypt(encrypted_skey, client_get_privateKey());
+
+            this.sessionKey = Crypt.getSecretKeyFromBytes( encoded_skey );
+
+            byte[] encrypted_nonce = Crypt.base64decode( encoded_encrypted_nonce );
+            byte[] decrypted_nonce = Crypt.aes_decrypt( encrypted_nonce, this.sessionKey, iv );
+
+            boolean valid = challenge(decrypted_nonce, input, output);
+
+            if(valid)
+            {
+                this.output = output;
+                this.input = input;
+            }
+            return valid;
+        }
+
+        public boolean challenge(byte[] nonce, BufferedReader input, PrintWriter output)
+        {
+            Integer r = client_get_nonce();
+            String rb = "" + r;
+            String ra = Crypt.base64encode(nonce);
             
+            send_challenge(rb, ra, output);
+    
+            if(validate_challenge(rb, ra, input)) return true;
+            else return false;
+        }
 
+        public void send_challenge(String n, String ra, PrintWriter output)
+        {
+            JSONObject obj = new JSONObject();
+            obj.put("type", "peer_challenge");
 
+            byte[] rb = Crypt.rsa_encrypt( n.getBytes(), this.publicKey );
+            obj.put("rb", Crypt.base64encode(rb));
 
+            String hashed_ra = Crypt.sha256hex(ra);
+            byte[] iv = Crypt.generateIV();
+            byte[] encrypted_ra = Crypt.aes_encrypt(hashed_ra.getBytes(), this.sessionKey, iv);
+
+            obj.put("ra", Crypt.base64encode(encrypted_ra));
+            obj.put("ra_salt", Crypt.base64encode(iv));
+        
+            output.println(obj.toString());
+        }
+
+        public boolean validate_challenge(String rb, String ra, BufferedReader input)
+        {
+            String valid_hash = Crypt.sha256hex ( ra + rb );
+            try
+            {
+                String recvbuf = input.readLine();
+                Object o = JSONValue.parse( recvbuf );
+                JSONObject jo = (JSONObject) o;
+
+                String type = (String) jo.get("type");
+                String recv_hash = (String) jo.get("hash");
+                
+                return type.equals("h3") && recv_hash.equals(valid_hash);
+            }
+            catch (IOException e) { return false; }
         }
 
         public void run(){
