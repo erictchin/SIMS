@@ -397,7 +397,7 @@ public class Client {
                 Object o = JSONValue.parse( peer_info );
                 JSONObject jo = (JSONObject) o;
 
-                Object hs = JSONValue.parse( (String)jo.get("handshake") );
+                Object hs = JSONValue.parse( (String)jo.get("conn_info") );
                 JSONObject hs_info = (JSONObject) hs; 
 
                 if( jo.get("type").equals("handshake") )
@@ -409,7 +409,7 @@ public class Client {
                     if(!peers.containsKey(name))
                         this.new_socket.close();
 
-                    if(!peers.get(name).handshake(hs_info, input, output)) 
+                    if(!peers.get(name).authenticate(hs_info, input, output)) 
                         this.new_socket.close();
                 }
             }
@@ -487,6 +487,7 @@ public class Client {
                         receiver.sendMessage( message );
                         System.out.println( "sent message to " + recipient );
                     }else{
+                        receiver.init_handshake();
                         System.out.println( recipient + " is not active" );
                     }
                 }else{
@@ -531,14 +532,17 @@ public class Client {
     // Peer -- keeps track of an individual peer
     // * Should listen for messages from peer
     // * Should be able to send messages to peer
-    class Peer extends Thread{
-
+    class Peer extends Thread
+    {
         String name;
         String ip;
         String port;
         String peer_port;
+
         PublicKey publicKey;
         SecretKey sessionKey;
+        
+        Socket socket;
         BufferedReader input;
         PrintWriter output;
         boolean active;
@@ -560,11 +564,91 @@ public class Client {
             this.valid = false;
         }
 
+        //build and send initial handshake information
+        // { type : handshake, name : name, conn_info : conn_info }
+        // conn_info is { key : PuB{KAB}, nonce : KAB{RA}, iv : iv }
+        public boolean init_handshake()
+        {
+            this.socket = new Socket(this.ip, Integer.parseInt(this.port));
+            this.input = new BufferedReader( new InputStreamReader( socket.getInputStream()));
+            this.output = new PrintWriter( this.socket.getOutputStream(), true );
+
+            JSONObject obj = new JSONObject();
+            JSONObject conn_info = new JSONObject();
+            obj.put( "type", "handshake" );
+            obj.put( "name", client_get_name() );
+
+            this.sessionKey = Crypt.generateAESKey();
+            byte[] encoded_sk = Crypt.getEncodedKey( this.sessionKey );
+            byte[] encrypted_sk = Crypt.rsa_encrypt( encoded_sk, this.publicKey );
+            conn_info.put( "key", Crypt.base64encode( encrypted_sk );
+
+            byte[] iv = Crypt.generateIV();
+            conn_info.put( "iv", base64encode(iv) );
+
+            Integer r = client_get_nonce();
+            byte[] ra = base64decode( "" + r );
+            byte[] encrypted_nonce = Crypt.aes_encrypt( ra, this.sessionKey, iv ); 
+            conn_info.put( "nonce", base64encode(encrypted_nonce) );
+
+            obj.put( "conn_info", conn_info.toString() );
+
+            this.output.println( obj.toString() );
+
+            if(recv_challenge(ra))
+                this.valid = true;
+        }
+
+        //waits for response from peer 
+        //A ← B: PuA{RB}, KAB{h1(RA)} 
+        public boolean recv_challenge(byte[] ra)
+        {
+            try
+            {
+                String recvbuf = input.readLine();    
+                Object o = JSONValue.parse( recvbuf );
+                JSONObject jo = (JSONObject) o;
+
+                String type = (String) jo.get("type");
+                String encoded_encrypted_rb = (String) jo.get("rb");
+                String encoded_ra_salt = (String) jo.get("ra_salt");
+                String encoded_encrypted_hashed_ra = (String) jo.get("ra"); 
+                
+                if(type.equals("peer_challenge"))
+                {
+
+                    byte[] encrypted_rb = Crypt.base64decode( encoded_encrypted_rb );
+                    byte[] rb = Crypt.rsa_decrypt( encrypted_rb, client_get_privateKey() );
+
+                    byte[] salt = Crypt.base64decode(encoded_ra_salt);
+                    byte[] encrypted_hashed_ra = Crypt.base64decode(encoded_encrypted_hashed_ra);
+                    
+                    byte[] hashed_ra = Crypt.aes_decrypt(encrypted_hashed_ra, this.sessionKey, salt);
+
+                    String enc_ra = Crypt.base64encode(ra);
+                    String enc_rb = Crypt.base64encode(rb);
+                
+                    String my_ra_hash = Crypt.sha256hex( enc_ra );
+                
+                    if( my_ra_hash.equals(Crypt.base64encode(hashed_ra)))
+                        send_nonces(enc_ra, enc_rb);
+                }
+        }
+
+        public void send_nonces(String ra, String rb)
+        {
+            JSONObject jo = new JSONObject();
+            jo.put( "type", "h3" );
+            jo.put( "hash", Crypt.sha256hex( ra + rb) );
+            this.output.println( jo.toString() );
+        }
+
+
         //A → B: PuB{KAB}, KAB{RA} 
         //A ← B: PuA{RB}, KAB{h1(RA)} 
         //A → B: h2(RA, RB)
         @SuppressWarnings("unchecked")
-        public boolean handshake(JSONObject hs_info, BufferedReader input, PrintWriter output)
+        public boolean challenge_hs(JSONObject hs_info, BufferedReader input, PrintWriter output)
         {
             String encoded_encrypted_skey = (String) hs_info.get("key");
             String encoded_encrypted_nonce = (String) hs_info.get("nonce");
@@ -586,6 +670,7 @@ public class Client {
             {
                 this.output = output;
                 this.input = input;
+                this.valid = true;
             }
             return valid;
         }
