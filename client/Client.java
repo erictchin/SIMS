@@ -30,9 +30,18 @@ public class Client {
 
     public static void main(String [] args) {
         // Usage: java Client <name> <server ip> <server port>
-        String name = args[0];
-        String server = args[1]; 
-        int port = Integer.parseInt(args[2]);
+        String name = "";
+        String server = "";
+        int port = -1;
+        if( args.length == 3 ){
+            name = args[0];
+            server = args[1]; 
+            port = Integer.parseInt(args[2]);
+        }else if( args.length == 2 ){
+            name = getUserName();
+            server = args[0];
+            port = Integer.parseInt( args[1] );
+        }
         // prompt for password
         String password = getUserPassword();
         try {
@@ -42,12 +51,20 @@ public class Client {
         }
     }    
 
-    public static String getUserPassword(){
-        System.out.print( "Please enter your password: " );
+    public static String getUserInput(String prompt){
+        System.out.print( "Please enter your " + prompt + ": " );
         java.util.Scanner s = new java.util.Scanner( System.in );
-        String password = s.nextLine();
+        String input = s.nextLine();
 
-        return password;
+        return input.trim();
+    }
+
+    public static String getUserName(){
+        return getUserInput( "username" );
+    }
+
+    public static String getUserPassword(){
+        return getUserInput( "password" );
     }
 
     public String getConnectedUsers(){
