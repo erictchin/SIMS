@@ -170,7 +170,6 @@ public class Client {
     public boolean receive_greeting(){
         try{
             String server_greeting = br.readLine();
-            System.out.println("Received greeting from server: " + server_greeting);
             Object o = JSONValue.parse( server_greeting );
             JSONObject a = (JSONObject) o;
 
