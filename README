@@ -1,39 +1,60 @@
 
-Problem Set 1
-+++++++++++++
+Secure Instant Messaging System
++++++++++++++++++++++++++++++++
 
 Eric Chin (chiner@ccs.neu.edu)
+John McGuiness (inkd@ccs.neu.edu)
 
 
-1. Internetworking
-==================
+The Server or KDC
+=================
 
-Detailed response listed in "part1.txt"
+There is a similar README with more information in the ./server/ directory.
+
+To compile the server, first `cd` into ./server and run 
+  * "make build" or
+  * "javac -cp ../libs/json-simple-1.1.1.jar:../libs/commons-io.jar: \
+      ../libs/commons-codec.jar:../encrypt/ ./Server.java"
+
+To run the server, `cd` into ./server and run 
+  * "make server" or 
+  * "java -cp ../libs/json-simple-1.1.1.jar:../libs/commons-io.jar: \
+      ../libs/commons-codec.jar:../encrypt/: Server <port>"
+
+  Note: "make server" will default to use port 9008.  This can be changed but must be 
+  kept consistent between the server and the client.
+
+  Note: to distribute the server alone, the three directories ./server/, ./encrypt, 
+  and ./libs are required.
 
 
-2. Chat Client and Server
-=========================
 
-Usage
------
+The Client
+==========
 
-To compile, run 
-  "make build" or
-  "javac -cp ./json-simple-1.1.1.jar Client.java Server.java"
+There is a similar README in the ./client/ directory.
 
-To run the server, run 
-  "make server" or 
-  "java -cp ./json-simple-1.1.1.jar: Server <port>"
-(e.g. "java -cp ./json-simple-1.1.1.jar: Server 9791")
+To compile the client, first `cd` into ./client and run 
+  * "make build" or
+  * "javac -cp ../libs/json-simple-1.1.1.jar:../libs/commons-io.jar: \
+       ../libs/commons-codec.jar:../encrypt/ ./Client.java"
 
-To run a client, run 
-  "make client" 
-  "java -cp ./json-simple-1.1.1.jar: Client <server ip> <server port>"
-(e.g. "java -cp ./json-simple-1.1.1.jar: Client 127.0.0.1 9791")
+To run the client, `cd` into ./client and run 
+  * "make client" or 
+  * "java -cp ../libs/json-simple-1.1.1.jar:../libs/commons-io.jar: \
+       ../libs/commons-codec.jar:../encrypt/: Client <server ip> <port>"
+
+  Note: "make client" will default to use server ip `localhost` and port `9008`.  
+  This is arbitrary and can be changed but must be kept consistent between the server 
+  and the client.
+
+  Note: to distribute the client alone, the three directories ./client/, ./encrypt, 
+  and ./libs are required.
+
 
 
 Dependencies
-------------
+============
 
 Developed and tested using Java version "1.6.0_27" and the OpenJDK Runtime 
 Environment as currently installed in the CCIS Linux environment.
@@ -41,22 +62,15 @@ Environment as currently installed in the CCIS Linux environment.
 This program requires "json-simple" (http://code.google.com/p/json-simple/),
 an open source Java library for JSON to encode and decode JSON text.
 
+This program requires "commons-io" and "commons-codec", two libraries from
+Apache's suite of Java libraries called Commons.  They are respectively
+used for file/network input/output and encoding.
+
+
 
 Implementation
---------------
+==============
 
-According to the requirements, this implementation communicates with
-three types of messages.  Messages are sent as JSON strings.
-
-GREETING
-
-  "{ 'type':'greeting', 'data':'' }"
-
-MESSAGE
-
-  "{ 'type':'message', 'data':'<message to server>' }"
-
-INCOMING
-
-  "{ 'type':'incoming', 'data':'<text to client>' }"
-
+Please view the ./docs/ directory, and particularly ./docs/sims-design-document.pdf
+for more information on this implementation of a Secure Instant Messaging
+System

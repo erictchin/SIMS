@@ -98,6 +98,7 @@ public class Server {
                 this.update_all_clients_lists();
             }else{
                 System.out.println( "- could not authenticate user." );
+                c.reject();
             }
         }
     }
@@ -160,6 +161,7 @@ public class Server {
         String name = "";
         String ip = "";
         String port = "";
+        String peer_port = "";
         PublicKey publicKey;
         SecretKey sessionKey;
         BufferedReader input;
@@ -183,6 +185,7 @@ public class Server {
 
             obj.put( "ip", this.ip );
             obj.put( "port", this.port );
+            obj.put( "peer_port", this.peer_port);
             obj.put( "name", this.name );
             obj.put( "key", this.getClientPublicKey() );
 
@@ -220,6 +223,10 @@ public class Server {
             }else{
                 valid = false;
             }
+        }
+
+        public void reject(){
+            this.output.println( "You could not be authenticated" );
         }
 
         public String getClientName(){
@@ -356,6 +363,8 @@ public class Server {
                 if( server_is_user_connected( this.name ) ){
                     return false;
                 }
+
+                this.peer_port = (String)a.get("peer_port");
 
                 // Get the RSA-encrypted session key
                 {

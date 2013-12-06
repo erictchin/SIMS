@@ -7,7 +7,6 @@ import java.net.*;
 import javax.crypto.*;
 import java.security.*;
 
-// import org.json.simple.JSONObject;
 import org.json.simple.*;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -17,6 +16,7 @@ public class Client {
     private BufferedReader br;
 
     private Socket client;
+    private ServerSocket peer_listener;
     private String name;
     private String password;
 
@@ -24,14 +24,24 @@ public class Client {
     private PrivateKey privateKey;
     private PublicKey serverKey;
     private SecretKey sessionKey_server;
+    private SecureRandom random;
 
     private HashMap<String, Peer> peers;
 
     public static void main(String [] args) {
         // Usage: java Client <name> <server ip> <server port>
-        String name = args[0];
-        String server = args[1]; 
-        int port = Integer.parseInt(args[2]);
+        String name = "";
+        String server = "";
+        int port = -1;
+        if( args.length == 3 ){
+            name = args[0];
+            server = args[1]; 
+            port = Integer.parseInt(args[2]);
+        }else if( args.length == 2 ){
+            name = getUserName();
+            server = args[0];
+            port = Integer.parseInt( args[1] );
+        }
         // prompt for password
         String password = getUserPassword();
         try {
@@ -41,12 +51,20 @@ public class Client {
         }
     }    
 
-    public static String getUserPassword(){
-        System.out.print( "Please enter your password: " );
+    public static String getUserInput(String prompt){
+        System.out.print( "Please enter your " + prompt + ": " );
         java.util.Scanner s = new java.util.Scanner( System.in );
-        String password = s.nextLine();
+        String input = s.nextLine();
 
-        return password;
+        return input.trim();
+    }
+
+    public static String getUserName(){
+        return getUserInput( "username" );
+    }
+
+    public static String getUserPassword(){
+        return getUserInput( "password" );
     }
 
     public String getConnectedUsers(){
@@ -68,6 +86,20 @@ public class Client {
     private String client_get_name(){
         return this.name;
     }
+    
+    public HashMap<String, Peer> client_getPeers()
+    {
+        return this.peers;
+    }
+
+    public PublicKey client_get_publicKey() { return this.publicKey; }
+    public PrivateKey client_get_privateKey() { return this.privateKey; }
+    public Integer client_get_nonce() 
+    {
+        byte[] r = new byte[4];
+        random.nextBytes(r);
+        return new Integer(Math.abs(java.nio.ByteBuffer.wrap(r).getInt()));
+    }
 
     // Construct a Client to handle user input and network communication
     public Client( String name, String ip, int port, String password ) throws Exception {
@@ -86,6 +118,8 @@ public class Client {
         }
 
         this.client  = new Socket(ip, port);
+        this.peer_listener = new ServerSocket(0);
+        this.random = new SecureRandom();
 
         this.br = new BufferedReader( new InputStreamReader( client.getInputStream()) ) ;
         this.out = new PrintWriter(client.getOutputStream(),true);
@@ -96,13 +130,19 @@ public class Client {
         if( receive_greeting() ){
             // Successfully authenticated the server and sent challenge confirmation.
             System.out.println( "Successfully authenticated the server." );
-            System.out.println( "Now starting listening threads" );
 
             new ChatThread().start();      // create thread to listen for user input
-            new MessagesThread().start();  // create thread for listening for messages
+            new MessagesThread().start();  // create thread for listening for server messages
+            new PeerListener(this.peer_listener).start();    // listen for incoming peer messages
         }else{
             System.out.println( "You could not be authenticated to the server." );
+            System.exit(0);
         }   
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            public void run() {
+                out.println( generateLogoff() );
+            }
+        });
     }
 
     // Abstracted method to generate messages of type with data (used for greeting and message)
@@ -132,8 +172,6 @@ public class Client {
         obj.put( "name", Crypt.base64encode( encrypted_name ) );
         obj.put( "salt", Crypt.base64encode( salt ) );
 
-        System.out.println( obj.toString() );
-
         return obj;
         
     }
@@ -150,10 +188,10 @@ public class Client {
         out.println( obj.toString() );
     }
 
+    @SuppressWarnings("unchecked")
     public boolean receive_greeting(){
         try{
             String server_greeting = br.readLine();
-            System.out.println("Received greeting from server: " + server_greeting);
             Object o = JSONValue.parse( server_greeting );
             JSONObject a = (JSONObject) o;
 
@@ -204,9 +242,11 @@ public class Client {
     @SuppressWarnings("unchecked")
     public void send_greeting(){
         JSONObject obj = new JSONObject();
+        int peer_port = this.peer_listener.getLocalPort();
 
         obj.put( "type", "greeting" );
         obj.put( "name", this.name );
+        obj.put( "peer_port", "" + peer_port);
 
         // d1: ServerPub-encrypted symmetric key
         {
@@ -258,6 +298,7 @@ public class Client {
     }
 
     // update the list of other clients with information from the server
+    @SuppressWarnings("unchecked")
     public boolean updateList( String data, String hmac, String iv_s ){
 
         try{
@@ -288,12 +329,14 @@ public class Client {
 
                     String ip = (String) client.get( "ip" );
                     String port = (String) client.get( "port" );
+                    String peer_port = (String) client.get( "peer_port" );
                     String name = (String) client.get( "name" );
                     String key_s = (String) client.get( "key" );
 
                     PublicKey key = Crypt.getPublicKeyFromBytes( Crypt.base64decode( key_s ) );
 
-                    newpeers.put( name, new Peer( ip, port, name, key ) );
+                    Peer new_peer = new Peer( ip, port, name, peer_port, key );
+                    newpeers.put( name, new_peer );
                 }
 
                 // make sure that the proper peers are in my peer list.
@@ -326,12 +369,83 @@ public class Client {
         }
     }
 
+    //thread listens to for new peer conversations
+    class PeerListener extends Thread {
+
+        private ServerSocket listener;
+
+        public PeerListener(ServerSocket listener)
+        {
+            this.listener = listener;
+        }
+
+        public void run() 
+        {
+            
+            while(true)
+            {
+                try
+                {
+                    Socket incoming = listener.accept();
+                    PeerAcceptor pa = new PeerAcceptor (incoming); 
+                }
+                catch (IOException ioe) { }
+                
+
+            }
+        }
+
+    }
     
     
+    //negotiates acceptance & activation of new peers
+    //Socket will have some information from initiator 
+    class PeerAcceptor 
+    {
+        Socket new_socket;
+        BufferedReader input;
+        PrintWriter output;
+        
+        @SuppressWarnings("unchecked")
+        public PeerAcceptor (Socket s)
+        {
+            try {
+                new_socket = s;
+                input = new BufferedReader( new InputStreamReader ( new_socket.getInputStream()));
+                output = new PrintWriter (new_socket.getOutputStream(), true);
+            
+                String peer_info = input.readLine();
+
+                Object o = JSONValue.parse( peer_info );
+                JSONObject jo = (JSONObject) o;
+
+                Object hs = JSONValue.parse( (String)jo.get("conn_info") );
+                JSONObject hs_info = (JSONObject) hs; 
+
+                //if its a handshake message
+                if( jo.get("type").equals("handshake") )
+                {
+
+                    String name = (String)jo.get("name");
+                    HashMap<String, Peer> peers = client_getPeers();
+
+                    //if the peer exists by name, and the challenge is successful,
+                    //start a new thread with that peer. 
+                    if(peers.containsKey(name)){
+                        if( peers.get(name).challenge_handshake( hs_info, input, output, new_socket ) ){
+                            peers.get(name).start();
+                        }
+                    }
+                }
+            }
+            catch (IOException ioe) { }
+        }
+    }
     
     // MessagesThread -- waits for messages from server
     class MessagesThread extends Thread {
         // parseMessage() : parses an INCOMING message from the server
+        @SuppressWarnings("unchecked")
         public String parseMessage( String msg ){
             if( msg != null ){
                 Object o = JSONValue.parse( msg );
@@ -389,12 +503,34 @@ public class Client {
                 String recipient = test.substring( space1, space2 ).trim();
                 String message = msg.substring( space2 ).trim();
                 
-                System.out.println( "Sending : \"" + message + "\" to " + recipient );
+                HashMap<String, Peer> peers = client_getPeers();
+
+                //if there is an attempt to send to self
+                if( client_get_name().equals( recipient ) ){
+
+                    System.out.println( "  Error: you cannot send yourself a message." );
+                }else if( peers.containsKey( recipient ) ){
+                    Peer receiver = peers.get( recipient );
+
+                    //if we've already handshook receiver, send message.
+                    //otherwise, initiate a handshake with them, then send.
+                    if( receiver.isActive() ){
+                        receiver.sendMessage( message );
+                    }else{
+                        receiver.init_handshake();
+                        receiver.sendMessage( message );
+                    }
+                }else{
+                    System.out.println( "  Error: user " + recipient + " is not valid." );
+                }
+
+
             }else if( test.startsWith( "logout" ) || test.startsWith( "logoff" ) || test.startsWith( "exit" ) ){
                 // Perform logout procedure
                 // 1. send server logout command
                 // 2. tell peers that i've disconnected?
                 out.println( generateLogoff() );
+                System.exit(0);
             }else if( test.startsWith( "help" ) ){
                 String commands = "Possible commands include: \n" +
                     "  * `list` - updates list and displays connected peers\n" +
@@ -427,22 +563,28 @@ public class Client {
     // Peer -- keeps track of an individual peer
     // * Should listen for messages from peer
     // * Should be able to send messages to peer
-    class Peer extends Thread{
-
+    class Peer extends Thread
+    {
         String name;
         String ip;
         String port;
+        String peer_port;
+
         PublicKey publicKey;
         SecretKey sessionKey;
+        
+        Socket socket;
         BufferedReader input;
         PrintWriter output;
         boolean active;
         boolean valid;
 
-        public Peer( String ip, String port, String name, PublicKey publicKey ){
+        public Peer(String ip, String port, String name, String peer_port, PublicKey publicKey )
+        {
             this.name = name;
             this.ip = ip;
             this.port = port;
+            this.peer_port = peer_port;
             this.publicKey = publicKey;
 
             this.sessionKey = null;
@@ -453,17 +595,285 @@ public class Client {
             this.valid = false;
         }
 
-        public void run(){
-            // First, set this to active.
+        //build and send initial handshake information
+        // { type : handshake, name : name, conn_info : conn_info }
+        // conn_info is { key : PuB{KAB}, nonce : KAB{RA}, iv : iv }
+        @SuppressWarnings("unchecked")
+        public void init_handshake()
+        {
+            try{
+                this.socket = new Socket(this.ip, Integer.parseInt(this.peer_port));
+                // System.out.println("New socket to : " + this.ip + ", " + this.peer_port);
+                this.input = new BufferedReader( new InputStreamReader( this.socket.getInputStream()));
+                this.output = new PrintWriter( this.socket.getOutputStream(), true );
 
-            this.active = true;
+                //build JSON
+                JSONObject obj = new JSONObject();
+                JSONObject conn_info = new JSONObject();
+                obj.put( "type", "handshake" );
+                obj.put( "name", client_get_name() );
 
+                //create session key for use with peer, encrypt with their public key
+                this.sessionKey = Crypt.generateAESKey();
+                byte[] encoded_sk = Crypt.getEncodedKey( this.sessionKey );
+                byte[] encrypted_sk = Crypt.rsa_encrypt( encoded_sk, this.publicKey );
+                conn_info.put( "key", Crypt.base64encode( encrypted_sk ));
 
+                byte[] iv = Crypt.generateIV();
+                conn_info.put( "iv", Crypt.base64encode(iv) );
+
+                //create challenge-nonce, encrypt with session key
+                Integer r = client_get_nonce();
+                byte[] ra = r.toString().getBytes();
+                byte[] encrypted_nonce = Crypt.aes_encrypt( ra, this.sessionKey, iv ); 
+                conn_info.put( "nonce", Crypt.base64encode(encrypted_nonce) );
+
+                obj.put( "conn_info", conn_info.toString() );
+
+                // System.out.println("Sending: " + obj.toString() );
+                this.output.println( obj.toString() );
+
+                //if the challenging was successful, activate peer and start thread
+                if(recv_challenge(ra))
+                {
+                    this.active = true;
+                    this.start();
+                }
+            }catch(Exception e){ e.printStackTrace(); }
         }
 
+        //waits for response from peer (B): 
+        //A <- B: PuA{RB}, KAB{h1(RA)} 
+        @SuppressWarnings("unchecked")
+        public boolean recv_challenge(byte[] ra)
+        {
+            try
+            {
+                String recvbuf = input.readLine();    
+                Object o = JSONValue.parse( recvbuf );
+                JSONObject jo = (JSONObject) o;
+
+                String type = (String) jo.get("type");
+                String encoded_encrypted_rb = (String) jo.get("rb");
+                String encoded_ra_salt = (String) jo.get("ra_salt");
+                String encoded_encrypted_hashed_ra = (String) jo.get("ra"); 
+                
+                if(type.equals("peer_challenge"))
+                {
+                    //decrypt RB
+                    byte[] encrypted_rb = Crypt.base64decode( encoded_encrypted_rb );
+                    byte[] rb = Crypt.rsa_decrypt( encrypted_rb, client_get_privateKey() );
+
+                    //decrypt RA
+                    byte[] salt = Crypt.base64decode(encoded_ra_salt);
+                    byte[] encrypted_hashed_ra = Crypt.base64decode(encoded_encrypted_hashed_ra);
+                    
+                    byte[] hashed_ra = Crypt.aes_decrypt(encrypted_hashed_ra, this.sessionKey, salt);
+
+                    String enc_ra = new String(ra, "UTF-8");
+                    String enc_rb = new String(rb, "UTF-8");
+                
+                    //compute hash of RA and compare 
+                    String my_ra_hash = Crypt.sha256hex( enc_ra );
+                    if( my_ra_hash.equals(new String(hashed_ra, "UTF-8"))){
+                        send_nonces(enc_ra, enc_rb);
+                        return true;
+                    }
+                }
+            }
+            catch (IOException ioe) {} 
+
+            return false;
+        }
+
+        //combines, hashes, sends RA and RB 
+        //A -> B: h2(RA, RB)
+        @SuppressWarnings("unchecked")
+        public void send_nonces(String ra, String rb)
+        {
+            JSONObject jo = new JSONObject();
+            jo.put( "type", "h3" );
+            jo.put( "hash", Crypt.sha256hex( ra + rb) );
+            this.output.println( jo.toString() );
+        }
+
+
+        //receives information from an initiate handshake request
+        //sends challenge as B to A: 
+        //A <- B: PuA{RB}, KAB{h1(RA)} 
+        @SuppressWarnings("unchecked")
+        public boolean challenge_handshake(JSONObject hs_info, BufferedReader input, PrintWriter output, Socket s)
+        {
+            this.socket = s;
+            String encoded_encrypted_skey = (String) hs_info.get("key");
+            String encoded_encrypted_nonce = (String) hs_info.get("nonce");
+
+            String encoded_iv = (String) hs_info.get("iv");
+            byte[] iv = Crypt.base64decode(encoded_iv);
+    
+            //decrypt session key using my private key
+            byte[] encrypted_skey = Crypt.base64decode( encoded_encrypted_skey );
+            byte[] encoded_skey = Crypt.rsa_decrypt(encrypted_skey, client_get_privateKey());
+
+            this.sessionKey = Crypt.getSecretKeyFromBytes( encoded_skey );
+
+            //decrypt nonce using session key
+            byte[] encrypted_nonce = Crypt.base64decode( encoded_encrypted_nonce );
+            byte[] decrypted_nonce = Crypt.aes_decrypt( encrypted_nonce, this.sessionKey, iv );
+
+            //send challenge
+            boolean valid = challenge(decrypted_nonce, input, output);
+
+            //if this is a valid client, set input and outputs and activate 
+            if(valid)
+            {
+                this.output = output;
+                this.input = input;
+                this.active = true;
+            }
+            return valid;
+        }
+
+        //sends challenge to handshake initiator
+        //A <- B: PuA{RB}, KAB{h1(RA)} 
+        @SuppressWarnings("unchecked")
+        public boolean challenge(byte[] nonce, BufferedReader input, PrintWriter output)
+        {
+            try 
+            {
+                //get RB
+                Integer r = client_get_nonce();
+                String rb_s = "" + r;
+                String ra_s = new String(nonce, "UTF-8");
+            
+                JSONObject obj = new JSONObject();
+                obj.put("type", "peer_challenge");
+
+                //encrypt RB with A's public key
+                byte[] rb = Crypt.rsa_encrypt( rb_s.getBytes(), this.publicKey );
+                obj.put("rb", Crypt.base64encode(rb));
+
+                //hash RA, encrypt that with session key
+                String hashed_ra = Crypt.sha256hex(ra_s);
+                byte[] iv = Crypt.generateIV();
+                byte[] encrypted_ra = Crypt.aes_encrypt(hashed_ra.getBytes(), this.sessionKey, iv);
+
+                obj.put("ra", Crypt.base64encode(encrypted_ra));
+                obj.put("ra_salt", Crypt.base64encode(iv));
+        
+                output.println(obj.toString());
+    
+                //wait for response from A
+                if(validate_challenge(rb_s, ra_s, input)) return true;
+                else return false;
+            }
+            catch (Exception e) { return false; } 
+        }
+
+        //validates response from handshake initiator
+        //A -> B: h2(RA, RB)
+        @SuppressWarnings("unchecked")
+        public boolean validate_challenge(String rb, String ra, BufferedReader input)
+        {
+            //hash to compare against
+            String valid_hash = Crypt.sha256hex ( ra + rb );
+            try
+            {
+                String recvbuf = input.readLine();
+                Object o = JSONValue.parse( recvbuf );
+                JSONObject jo = (JSONObject) o;
+
+                String type = (String) jo.get("type");
+                String recv_hash = (String) jo.get("hash");
+                
+                //compare with received
+                return type.equals("h3") && recv_hash.equals(valid_hash);
+            }
+            catch (IOException e) { return false; }
+        }
+
+        public void run(){
+            // First, set this to active.
+            this.active = true;
+            String msg;
+            try {
+                while(active) {
+                    msg = this.input.readLine();
+                    msg = parseMessage( msg );
+
+                    if( msg.length() > 0 ){
+                        System.out.println( "\n<" + this.name + ">: " + msg );
+                        System.out.print( "\n> " );
+                    }
+                } 
+            } catch(Exception e) {}
+        }
+
+        @SuppressWarnings("unchecked")
+        public void sendMessage(String msg){
+            JSONObject obj = new JSONObject();
+
+            try{ 
+                byte[] salt_b = Crypt.generateIV();
+                String encrypted_msg = Crypt.base64encode(
+                        Crypt.aes_encrypt( msg.getBytes(), this.sessionKey, salt_b ) );
+                String hmac = Crypt.base64encode( Crypt.generateMAC( msg.getBytes(),
+                            this.sessionKey ) );
+
+                obj.put( "type", "send" );
+                obj.put( "data", encrypted_msg );
+                obj.put( "sig", hmac );
+                obj.put( "iv", Crypt.base64encode( salt_b ) );
+
+
+                output.println( obj.toString() );
+            }catch(Exception e){
+                e.printStackTrace();
+                System.out.println( "  Error sending message to <" + this.name + ">." );
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        public String parseMessage( String msg ){
+            if( msg != null ){
+                Object o = JSONValue.parse( msg );
+                JSONObject a = (JSONObject) o;
+
+                if( a.get("type").equals("send" ) ){
+                    String data = (String)a.get("data");
+                    String hmac = (String)a.get("sig");
+                    String iv_s = (String)a.get("iv");
+
+                    try{
+                        byte[] iv = Crypt.base64decode( iv_s );
+                        // 1. base64decode data
+                        byte[] data_b = Crypt.base64decode( data );
+                        // 2. decrypt data using session key with server
+                        byte[] decrypted_data = Crypt.aes_decrypt( 
+                                data_b, this.sessionKey, iv );
+                        // 3. verify signature of decrypted data with hmac
+                        String real_data = new String(decrypted_data);
+
+                        // calculate hmac and compare it with hmac
+                        String my_hmac = Crypt.base64encode( 
+                                Crypt.generateMAC( decrypted_data, this.sessionKey ) );
+
+                        if( my_hmac.equals( hmac ) ){
+                            // confirmed the signature of the data
+
+                            return real_data;
+                        }
+                    }catch(Exception e){}
+
+                } 
+            }
+
+            return "";
+        }
         public boolean isActive(){
             return this.active;
         }
+
     }
 } 
 

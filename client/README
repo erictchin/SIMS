@@ -1,0 +1,31 @@
+
+Secure Instant Messaging System (Client)
+========================================
+
+To compile the client, run
+  * `make build` or
+  * `javac -cp ../libs/json-simple-1.1.1.jar:../libs/commons-io.jar: \
+      ../libs/commons-codec.jar:../encrypt/ ./Client.java`
+
+To run the client, run
+  * `make client` or
+  * `java -cp ../libs/json-simple-1.1.1.jar:../libs/commons-io.jar: \
+      ../libs/commons-codec.jar:../encrypt/ Client <server ip> <port>`
+
+  The program will prompt the user for a username and password to authenticate
+  with the server.
+
+  Note: after running the client, the `help` command will provide information
+  on the functionality provided to the user.
+
+
+Dependencies
+------------
+
+This program requires several libraries:
+  * json-simple
+  * commons-io
+  * commons-codec
+
+And uses the APIs provided by:
+  * ../encrypt/Crypt.java
