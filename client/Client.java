@@ -568,36 +568,38 @@ public class Client {
         // { type : handshake, name : name, conn_info : conn_info }
         // conn_info is { key : PuB{KAB}, nonce : KAB{RA}, iv : iv }
         @SuppressWarnings("unchecked")
-        public boolean init_handshake()
+        public void init_handshake()
         {
-            this.socket = new Socket(this.ip, Integer.parseInt(this.port));
-            this.input = new BufferedReader( new InputStreamReader( socket.getInputStream()));
-            this.output = new PrintWriter( this.socket.getOutputStream(), true );
+            try{
+                this.socket = new Socket(this.ip, Integer.parseInt(this.port));
+                this.input = new BufferedReader( new InputStreamReader( socket.getInputStream()));
+                this.output = new PrintWriter( this.socket.getOutputStream(), true );
 
-            JSONObject obj = new JSONObject();
-            JSONObject conn_info = new JSONObject();
-            obj.put( "type", "handshake" );
-            obj.put( "name", client_get_name() );
+                JSONObject obj = new JSONObject();
+                JSONObject conn_info = new JSONObject();
+                obj.put( "type", "handshake" );
+                obj.put( "name", client_get_name() );
 
-            this.sessionKey = Crypt.generateAESKey();
-            byte[] encoded_sk = Crypt.getEncodedKey( this.sessionKey );
-            byte[] encrypted_sk = Crypt.rsa_encrypt( encoded_sk, this.publicKey );
-            conn_info.put( "key", Crypt.base64encode( encrypted_sk ));
+                this.sessionKey = Crypt.generateAESKey();
+                byte[] encoded_sk = Crypt.getEncodedKey( this.sessionKey );
+                byte[] encrypted_sk = Crypt.rsa_encrypt( encoded_sk, this.publicKey );
+                conn_info.put( "key", Crypt.base64encode( encrypted_sk ));
 
-            byte[] iv = Crypt.generateIV();
-            conn_info.put( "iv", Crypt.base64encode(iv) );
+                byte[] iv = Crypt.generateIV();
+                conn_info.put( "iv", Crypt.base64encode(iv) );
 
-            Integer r = client_get_nonce();
-            byte[] ra = Crypt.base64decode( "" + r );
-            byte[] encrypted_nonce = Crypt.aes_encrypt( ra, this.sessionKey, iv ); 
-            conn_info.put( "nonce", Crypt.base64encode(encrypted_nonce) );
+                Integer r = client_get_nonce();
+                byte[] ra = Crypt.base64decode( "" + r );
+                byte[] encrypted_nonce = Crypt.aes_encrypt( ra, this.sessionKey, iv ); 
+                conn_info.put( "nonce", Crypt.base64encode(encrypted_nonce) );
 
-            obj.put( "conn_info", conn_info.toString() );
+                obj.put( "conn_info", conn_info.toString() );
 
-            this.output.println( obj.toString() );
+                this.output.println( obj.toString() );
 
-            if(recv_challenge(ra))
-                this.valid = true;
+                if(recv_challenge(ra))
+                    this.valid = true;
+            }catch(Exception e){}
         }
 
         //waits for response from peer 
@@ -632,11 +634,16 @@ public class Client {
                 
                     String my_ra_hash = Crypt.sha256hex( enc_ra );
                 
-                    if( my_ra_hash.equals(Crypt.base64encode(hashed_ra)))
+                    if( my_ra_hash.equals(Crypt.base64encode(hashed_ra))){
                         send_nonces(enc_ra, enc_rb);
+
+                        return true;
+                    }
                 }
             }
             catch (IOException ioe) {} 
+
+            return false;
         }
 
         @SuppressWarnings("unchecked")
