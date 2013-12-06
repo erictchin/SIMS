@@ -113,7 +113,6 @@ public class Client {
         if( receive_greeting() ){
             // Successfully authenticated the server and sent challenge confirmation.
             System.out.println( "Successfully authenticated the server." );
-            System.out.println( "Now starting listening threads" );
 
             new ChatThread().start();      // create thread to listen for user input
             new MessagesThread().start();  // create thread for listening for server messages
@@ -121,6 +120,11 @@ public class Client {
         }else{
             System.out.println( "You could not be authenticated to the server." );
         }   
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            public void run() {
+                out.println( generateLogoff() );
+            }
+        });
     }
 
     // Abstracted method to generate messages of type with data (used for greeting and message)
@@ -407,7 +411,6 @@ public class Client {
                     if(peers.containsKey(name)){
                         if( peers.get(name).challenge_handshake( hs_info, input, output, new_socket ) ){
                             peers.get(name).start();
-                            System.out.println( "successful handshake" );
                         }
                     }
                 }
@@ -484,11 +487,9 @@ public class Client {
 
                     if( receiver.isActive() ){
                         receiver.sendMessage( message );
-                        System.out.println( "sent message to " + recipient );
                     }else{
                         receiver.init_handshake();
                         receiver.sendMessage( message );
-                        // System.out.println( recipient + " is not active" );
                     }
                 }else{
                     System.out.println( "  Error: user " + recipient + " is not valid." );
@@ -774,7 +775,6 @@ public class Client {
 
         @SuppressWarnings("unchecked")
         public void sendMessage(String msg){
-            System.out.println( "   " + msg );
             JSONObject obj = new JSONObject();
 
             try{ 
@@ -793,14 +793,13 @@ public class Client {
                 output.println( obj.toString() );
             }catch(Exception e){
                 e.printStackTrace();
-                System.out.println( "Error sending message to <" + this.name + ">." );
+                System.out.println( "  Error sending message to <" + this.name + ">." );
             }
         }
 
         @SuppressWarnings("unchecked")
         public String parseMessage( String msg ){
             if( msg != null ){
-                System.out.println( "Received message " + msg );
                 Object o = JSONValue.parse( msg );
                 JSONObject a = (JSONObject) o;
 
